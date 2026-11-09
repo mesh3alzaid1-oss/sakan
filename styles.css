@@ -1,8 +1,9 @@
 /* Sakan: two styles (vivid, omani) x two themes (light, dark). Every colour is a token below. */
 :root{
-  --font: 'Readex Pro', 'Segoe UI', Tahoma, sans-serif;
-  --display: 'Readex Pro', 'Segoe UI', Tahoma, sans-serif;
-  --num: 'Readex Pro', 'Segoe UI', sans-serif;
+  --font: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, sans-serif;
+  --display: 'Noto Kufi Arabic', 'Segoe UI', Tahoma, sans-serif;
+  --num: 'Noto Kufi Arabic', 'Segoe UI', sans-serif;
+  --ink:#0C0C0E; --paper:#F4F4F1; --lime:#C6F36B;
 }
 
 /* ---------- Vivid · dark ---------- */
@@ -260,4 +261,74 @@ a.tile{text-decoration:none;min-height:190px;transition:transform .15s}
   .kvs{grid-template-columns:repeat(2,minmax(0,1fr))}
   #toast{bottom:calc(100px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);text-align:center}
   .glass,.tile,.btn.soft,.act,.segtabs,.back{-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5)}
+}
+
+/* ---------- Brand: the ن mark ---------- */
+.logo{display:inline-flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;flex:none;display:block}
+.mark rect{fill:var(--ink)}
+.mark .cup{fill:none;stroke:var(--paper);stroke-width:8;stroke-linecap:round}
+.mark .dot{fill:var(--lime)}
+:root[data-style="vivid"][data-mode="dark"] .mark rect{fill:#1C1D22}
+.dbrand .logo{padding:0 12px}
+.dbrand .brand,.mbrand .brand{padding:0;font-size:24px;line-height:1.4}
+.dbrand .tagline{padding:0 12px}
+.mbrand .logo{gap:8px}.mbrand .mark{width:30px;height:30px}
+:root[data-style="omani"] .dbrand .logo{padding:0 4px 0 0}
+:root[data-style="omani"] .dbrand .tagline{display:none}
+.switch{display:block;text-align:center;margin-top:10px;padding:9px 12px;border-radius:14px;background:var(--row);color:var(--fg);text-decoration:none;font-weight:600;font-size:13px}
+:root[data-style="omani"] .switch{margin:0;border-radius:999px}
+body.tenant .side.owner,body:not(.tenant) .side.tnav{display:none}
+
+/* ---------- Tenant portal ---------- */
+.who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);white-space:nowrap}
+.who select{font:inherit;font-size:14px;color:var(--fg);background:var(--glass);border:0;border-radius:999px;padding:6px 14px;box-shadow:0 6px 18px var(--shadow)}
+.steps{display:flex;gap:6px;margin-top:4px}
+.steps span{flex:1;height:6px;border-radius:999px;background:var(--line)}
+.steps span.on{background:var(--active)}
+.steplbl{display:flex;justify-content:space-between;font-size:11px;color:var(--mut)}
+.thumb{width:72px;height:72px;border-radius:14px;object-fit:cover;flex:none;background:var(--input)}
+.jobrow{display:flex;gap:12px;align-items:flex-start}
+.jobrow .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.cats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cats label{position:relative;display:block;cursor:pointer}
+.cats input{position:absolute;opacity:0;inset:0}
+.cats span{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border-radius:16px;background:var(--input);font-size:13px;font-weight:600;color:var(--fg);text-align:center;transition:transform .15s}
+.cats span i{font-style:normal;font-size:20px}
+.cats input:checked+span{background:var(--active);color:var(--activeFg)}
+.cats input:focus-visible+span{outline:2px solid var(--link);outline-offset:2px}
+.panel textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--input);border:0;border-radius:12px;padding:10px 12px;min-height:90px;resize:vertical}
+.drop{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:var(--input);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.drop img{width:56px;height:56px;border-radius:10px;object-fit:cover}
+.drop .ph{width:56px;height:56px;border-radius:10px;display:grid;place-items:center;background:var(--row);font-size:22px;flex:none}
+.methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.method{border:0;text-align:right;border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:6px;background:var(--glass);color:var(--fg);box-shadow:0 10px 30px var(--shadow);-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);transition:transform .18s cubic-bezier(.3,.7,.2,1.4)}
+.method:active{transform:scale(.97)}
+.method b{font-size:16px}
+.method.main{background:var(--active);color:var(--activeFg)}
+.method.main .mut{color:inherit;opacity:.75}
+.bank{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.bank span:nth-child(odd){color:var(--mut)}
+.receipts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.rc{position:relative;overflow:hidden;border-radius:22px;padding:20px;background:#FFFFFF;color:#0C0C0E;box-shadow:0 14px 40px var(--shadow);display:flex;flex-direction:column;gap:6px;border:0;text-align:right}
+.rc::before{content:"";position:absolute;inset:0;opacity:.07;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M12 24a12 12 0 0 0 24 0' fill='none' stroke='%230C0C0E' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M24 10l4 4-4 4-4-4z' fill='%230C0C0E'/%3E%3C/svg%3E");pointer-events:none}
+.rc>*{position:relative}
+.rc .lblr{font-size:12px;color:#55585F;letter-spacing:.04em}
+.rc .amt{align-self:flex-start;font-weight:800;font-size:20px;background:#C6F36B;border-radius:10px;padding:2px 12px}
+.rc .amt.wait{background:#FFF1D6;color:#7A4410}
+.rc .rlogo{display:flex;align-items:center;gap:8px;font-weight:800}
+.rc .rlogo .mark{width:26px;height:26px}
+.rc .rlogo .mark rect{fill:#0C0C0E}
+.shot{width:100%;max-height:60vh;object-fit:contain;border-radius:16px;background:var(--input)}
+.empty{padding:28px;text-align:center;color:var(--mut)}
+@media (max-width:760px){
+  .methods{grid-template-columns:minmax(0,1fr)}
+  .receipts{grid-template-columns:minmax(0,1fr)}
+  .side .switch{display:none}
+  .who{width:100%}.who select{flex:1}
+}
+@media print{
+  body::before,.side,.mhead,.tools,#toast{display:none!important}
+  .app{display:block;padding:0}
 }

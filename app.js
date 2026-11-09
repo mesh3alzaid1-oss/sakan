@@ -70,7 +70,7 @@ function seed() {
 
 let db;
 try { db = JSON.parse(localStorage.getItem(STORE)) || seed(); } catch (e) { db = seed(); }
-function persist() { try { localStorage.setItem(STORE, JSON.stringify(db)); } catch (e) {} }
+function persist() { try { localStorage.setItem(STORE, JSON.stringify(db)); return true; } catch (e) { return false; } }
 function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
 let rentFilter = 'all';
@@ -155,7 +155,7 @@ function addTenant(unitId) {
     { key: 'rent', label: 'الإيجار الشهري (ر.ع.)', type: 'number', value: u.rent, required: true },
     { key: 'due', label: 'تاريخ الاستحقاق', value: '1 ديسمبر' }
   ], (v) => {
-    const t = { id: uid('t'), unitId: v.unitId, name: v.name.trim(), phone: v.phone.trim(), rent: Number(v.rent), due: v.due, status: 'due', note: 'مستحق' };
+    const t = { id: uid('t'), unitId: v.unitId, name: v.name.trim(), phone: v.phone.trim(), rent: Number(v.rent), due: v.due, status: 'due', note: 'مستحق', receipts: [] };
     db.tenants.push(t); unitOf(v.unitId).tenantId = t.id; toast('تمت إضافة ' + t.name);
   });
 }
@@ -180,7 +180,12 @@ function removeTenant(id) {
     db.tenants = db.tenants.filter((x) => x.id !== id); toast('أصبحت الوحدة شاغرة');
   }, 'إخلاء وحذف');
 }
-function markPaid(id) { const t = tOf(id); t.status = 'paid'; t.note = 'دُفع اليوم'; toast('تم تسجيل دفع ' + t.name); }
+function markPaid(id, method = 'سجّله المالك') {
+  const t = tOf(id); const rs = receiptsOf(t);
+  const r = rs.find((x) => x.month === CUR);
+  if (r) r.status = 'ok'; else rs.push({ id: uid('r'), month: CUR, amount: t.rent, date: today(), method, status: 'ok' });
+  t.status = 'paid'; t.note = 'دُفع ' + today(); toast('تم تسجيل دفع ' + t.name);
+}
 
 /* ---------- Pages ---------- */
 function overview() {
@@ -221,7 +226,9 @@ function rent() {
   const tab = (k, n) => `<button type="button" role="tab" data-filter="${k}" class="${rentFilter === k ? 'on' : ''}" aria-selected="${rentFilter === k}">${n}</button>`;
   const rows = list.map((x) => {
     const pay = x.status === 'paid' ? '' : `<button class="btn small" data-pay="${x.id}">${x.status === 'receipt' ? 'تأكيد الدفع' : 'تم الدفع'}</button> <button class="btn soft small" data-remind="${x.id}">تذكير</button>`;
-    return `<tr><td data-label="المستأجر"><span class="v"><b>${esc(x.name)}</b></span></td><td data-label="الوحدة" class="mut"><span class="v">${esc(place(x.unitId))}</span></td><td data-label="الإيجار"><span class="v"><span class="num">${fmt(x.rent)}</span> ر.ع.</span></td><td data-label="الاستحقاق"><span class="v">${esc(x.due)}</span></td><td data-label="الحالة"><span class="v">${pill(x)}</span></td><td class="rowacts">${pay} <button class="btn soft small" data-edit="${x.id}">تعديل</button> <button class="btn danger small" data-del="${x.id}">حذف</button></td></tr>`;
+    const rv = x.status === 'receipt' && reviewReceipt(x);
+    const view = rv && rv.img ? ` <button class="btn soft small" data-view-rc="${rv.id}">عرض الإيصال</button>` : '';
+    return `<tr><td data-label="المستأجر"><span class="v"><b>${esc(x.name)}</b></span></td><td data-label="الوحدة" class="mut"><span class="v">${esc(place(x.unitId))}</span></td><td data-label="الإيجار"><span class="v"><span class="num">${fmt(x.rent)}</span> ر.ع.</span></td><td data-label="الاستحقاق"><span class="v">${esc(x.due)}</span></td><td data-label="الحالة"><span class="v">${pill(x)}</span></td><td class="rowacts">${pay}${view} <button class="btn soft small" data-edit="${x.id}">تعديل</button> <button class="btn danger small" data-del="${x.id}">حذف</button></td></tr>`;
   }).join('');
   return `<div class="tools">
       <div class="segtabs" role="tablist" aria-label="تصفية المستأجرين"><span class="ind" aria-hidden="true"></span>${tab('all', 'الكل <span class="num">' + db.tenants.length + '</span>')}${tab('paid', 'دفع <span class="num">' + count('paid') + '</span>')}${tab('unpaid', 'لم يدفع <span class="num">' + count('unpaid') + '</span>')}${tab('late', 'متأخر <span class="num">' + count('late') + '</span>')}</div>
@@ -288,7 +295,7 @@ function maintenance() {
   const col = (s, title) => {
     const list = db.jobs.filter((j) => j.status === s);
     return `<section class="tile"><div class="head" style="margin:0"><h2>${title}</h2><span class="pill ${s === 'done' ? 'ok' : s === 'new' ? 'new' : 'due'}">${list.length}</span></div>
-      ${list.map((j) => `<article class="job"><b>${esc(j.title)}</b><span class="mut" style="font-size:13px">${esc(place(j.unitId))}</span><span class="mut" style="font-size:13px">${esc(j.from)}</span>${NEXT[s] ? `<button class="btn" style="align-self:flex-start" data-move="${j.id}">${NEXT_LABEL[s]}</button>` : ''}</article>`).join('') || '<p class="mut">لا شيء هنا.</p>'}</section>`;
+      ${list.map((j) => `<article class="job">${j.photo ? `<img class="thumb" style="width:100%;height:150px" src="${esc(j.photo)}" alt="صورة من المستأجر">` : ''}<b>${esc(j.title)}${j.urgent ? ' <span class="pill late">عاجل</span>' : ''}</b>${j.desc ? `<span style="font-size:14px">${esc(j.desc)}</span>` : ''}<span class="mut" style="font-size:13px">${esc(place(j.unitId))}</span><span class="mut" style="font-size:13px">${esc(j.from)}</span>${NEXT[s] ? `<button class="btn" style="align-self:flex-start" data-move="${j.id}">${NEXT_LABEL[s]}</button>` : ''}</article>`).join('') || '<p class="mut">لا شيء هنا.</p>'}</section>`;
   };
   return `<div class="tools"><h1>طلبات المستأجرين</h1></div><div class="cols">${col('new', 'جديد')}${col('progress', 'قيد التنفيذ')}${col('done', 'تم الإصلاح')}</div>`;
 }
@@ -301,20 +308,195 @@ function prefs() {
     <div class="choice">${opt('vivid', 'ملوّن', 'مربعات زجاجية بألوان زاهية وقائمة جانبية.', ['#C6F36B', '#2DD4BF', '#60A5FA'])}${opt('omani', 'عُماني', 'ألوان الرمل والأخضر والطيني وقائمة علوية.', ['#34503F', '#B4532A', '#CDBE9E'])}</div></section>
   <section class="tile" style="margin-bottom:16px"><h2>المظهر</h2>
     <div class="seg" style="max-width:260px"><button type="button" data-set-theme="light" class="${th === 'light' ? 'on' : ''}">فاتح</button><button type="button" data-set-theme="dark" class="${th === 'dark' ? 'on' : ''}">داكن</button></div></section>
+  <section class="tile" style="margin-bottom:16px"><h2>بوابة المستأجر</h2><p class="mut" style="margin:0">شاهد التطبيق كما يراه المستأجر: الدفع، رفع الإيصال، وطلبات الصيانة مع الصور. كل ما يرسله يظهر عندك هنا.</p><a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-home">فتح بوابة المستأجر</a></section>
   <section class="tile" style="margin-bottom:16px"><h2>البيانات</h2><p class="mut" style="margin:0">تُحفظ تغييراتك في هذا المتصفح فقط.</p><button class="btn danger" style="align-self:flex-start" data-reset>إعادة البيانات التجريبية</button></section>
-  <section class="tile about"><span class="brand" style="padding:0">سكن</span><b style="font-size:18px">كل عقاراتك في مكان واحد</b><p style="margin:0;max-width:60ch">سكن يجمع مبانيك ووحداتك ومستأجريك في شاشة واحدة: من دفع ومن لم يدفع، الوحدات الشاغرة، وطلبات الصيانة. ويمكن ربطه بلينا، المساعدة الصوتية من CUE، لتسجيل طلبات المستأجرين من الهاتف.</p><span class="mut" style="font-size:13px">من تطوير CUE · فريق من مسقط يصمم المواقع والتطبيقات ووكلاء الذكاء الاصطناعي للشركات.</span><span class="mut" style="font-size:12px">نسخة تجريبية · كل الأسماء والمبالغ أمثلة.</span></section>`;
+  <section class="tile about"><span class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand" style="padding:0">سكن</span></span><b style="font-size:18px">كل عقاراتك في مكان واحد</b><p style="margin:0;max-width:60ch">سكن يجمع مبانيك ووحداتك ومستأجريك في شاشة واحدة: من دفع ومن لم يدفع، الوحدات الشاغرة، وطلبات الصيانة. ويمكن ربطه بلينا، المساعدة الصوتية من CUE، لتسجيل طلبات المستأجرين من الهاتف.</p><span class="mut" style="font-size:13px">من تطوير CUE · فريق من مسقط يصمم المواقع والتطبيقات ووكلاء الذكاء الاصطناعي للشركات.</span><span class="mut" style="font-size:12px">نسخة تجريبية · كل الأسماء والمبالغ أمثلة.</span></section>`;
 }
+
+/* ---------- Receipts and payments (shared by owner and tenant) ---------- */
+const CUR = 'نوفمبر 2026';
+const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const today = () => { const d = new Date(); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+function receiptsOf(t) {
+  if (!t.receipts) {
+    t.receipts = ['سبتمبر', 'أكتوبر'].map((m) => ({ id: uid('r'), month: m + ' 2026', amount: t.rent, date: '1 ' + m, method: 'تحويل بنكي', status: 'ok' }));
+    if (t.status === 'paid') t.receipts.push({ id: uid('r'), month: CUR, amount: t.rent, date: (t.note || '').replace('دُفع ', '') || '1 نوفمبر', method: 'تحويل بنكي', status: 'ok' });
+  }
+  return t.receipts;
+}
+const reviewReceipt = (t) => receiptsOf(t).find((r) => r.month === CUR && r.status === 'review');
+function readImage(file) {
+  return new Promise((res) => {
+    if (!file || !file.size || !/^image\//.test(file.type)) return res(null);
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 900 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => res(null); img.src = r.result;
+    };
+    r.onerror = () => res(null); r.readAsDataURL(file);
+  });
+}
+function showImage(src, title, extra = '') {
+  sheetSave = null;
+  $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h2>${esc(title)}</h2><img class="shot" src="${esc(src)}" alt="${esc(title)}"><div class="bars">${extra}<button class="btn soft" data-close>إغلاق</button></div></div>`;
+  $('#sheet').hidden = false;
+}
+
+/* ---------- Tenant portal ---------- */
+let meId = null;
+try { meId = localStorage.getItem('sakan-tenant'); } catch (e) {}
+function me() {
+  let t = meId && tOf(meId);
+  if (!t) { t = tOf('tb4-2') || db.tenants[0]; meId = t ? t.id : null; }
+  return t;
+}
+function whoSel() {
+  const t = me();
+  const list = [...db.tenants].sort((a, b) => (a.status === 'paid') - (b.status === 'paid'));
+  return `<label class="who">تجربة كمستأجر<select id="who" aria-label="اختر المستأجر">${list.map((x) => `<option value="${x.id}" ${t && x.id === t.id ? 'selected' : ''}>${esc(x.name)} · ${esc(place(x.unitId))}</option>`).join('')}</select></label>`;
+}
+const STEP = { new: 1, progress: 2, done: 3 };
+const STEP_TXT = { new: 'تم الاستلام', progress: 'قيد التنفيذ', done: 'تم الإصلاح' };
+function jobCard(j) {
+  const n = STEP[j.status];
+  return `<article class="jobrow">${j.photo ? `<img class="thumb" src="${esc(j.photo)}" alt="صورة الطلب">` : ''}<div class="grow">
+    <div class="tools" style="margin:0"><b>${esc(j.title)}</b><span class="pill ${j.status === 'done' ? 'ok' : j.status === 'new' ? 'new' : 'due'}">${STEP_TXT[j.status]}</span></div>
+    ${j.desc ? `<span style="font-size:14px">${esc(j.desc)}</span>` : ''}
+    <span class="mut" style="font-size:12px">${esc([j.cat, j.date, j.urgent ? 'عاجل' : ''].filter(Boolean).join(' · ') || j.from)}</span>
+    <div class="steps" aria-hidden="true"><span class="${n >= 1 ? 'on' : ''}"></span><span class="${n >= 2 ? 'on' : ''}"></span><span class="${n >= 3 ? 'on' : ''}"></span></div>
+    <div class="steplbl" aria-hidden="true"><span>تم الاستلام</span><span>قيد التنفيذ</span><span>تم الإصلاح</span></div>
+  </div></article>`;
+}
+const noTenant = () => `<div class="tools"><h1>بوابة المستأجر</h1></div><section class="tile empty">لا يوجد مستأجرون بعد. أضف مستأجرًا من حساب المالك.<a class="switch" href="#overview">العودة لحساب المالك</a></section>`;
+
+function tHome() {
+  const t = me(); if (!t) return noTenant();
+  const u = unitOf(t.unitId), b = u && bOf(u.buildingId);
+  const jobs = db.jobs.filter((j) => j.unitId === t.unitId);
+  const open = jobs.filter((j) => j.status !== 'done');
+  const st = t.status;
+  const msg = st === 'paid' ? 'تم الدفع. شكرًا لك.' : st === 'receipt' ? 'إيصالك وصل للمالك وهو قيد المراجعة.' : st === 'late' ? `${esc(t.note)}. الرجاء الدفع في أقرب وقت.` : `يستحق في ${esc(t.due)}.`;
+  const cta = st === 'paid' ? `<a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-receipts">عرض الإيصال</a>` : st === 'receipt' ? '' : `<a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-pay">ادفع الآن</a>`;
+  return `<div class="tools"><div><span class="mut">${esc(place(t.unitId))}</span><h1>مرحبًا ${esc(t.name.split(' ')[0])}</h1></div>${whoSel()}</div>
+  <div class="grid">
+    <section class="tile c ${st === 'paid' ? 'hero' : 't2'} s2 r2">
+      <span class="lbl">إيجار ${CUR}</span>
+      <div><div class="big" style="font-size:clamp(64px,8vw,112px)"><span class="num">${fmt(t.rent)}</span></div><div style="font-size:20px;font-weight:600">ريال عُماني</div></div>
+      <span style="font-weight:600">${msg}</span>${cta}
+    </section>
+    <section class="tile c t3"><span class="lbl">طلباتي المفتوحة</span><span class="val num">${open.length}</span><button class="btn" style="align-self:flex-start" data-new-req>طلب صيانة جديد</button></section>
+    <section class="tile gray"><span class="lbl">وحدتي</span><span class="val" style="font-size:22px">${esc(u ? u.label : '—')}</span><span style="font-size:13px;font-weight:600">${esc(b ? b.name : '')}${b && b.area ? ' · ' + esc(b.area) : ''}</span></section>
+    <section class="tile s4"><div class="head" style="margin:0"><h2>آخر طلباتي</h2><a href="#t-requests">كل الطلبات</a></div>
+      ${jobs.slice(-2).reverse().map(jobCard).join('<hr style="border:0;border-top:1px solid var(--line);margin:6px 0">') || '<p class="mut" style="margin:0">لا توجد طلبات. إذا تعطل شيء في وحدتك، أرسل طلبًا مع صورة.</p>'}</section>
+  </div>
+  <a class="switch" href="#overview" style="max-width:260px;margin-top:16px">العودة لحساب المالك (تجربة)</a>`;
+}
+
+function tPay() {
+  const t = me(); if (!t) return noTenant();
+  const head = `<div class="tools"><h1>الدفع</h1>${whoSel()}</div>`;
+  if (t.status === 'paid') return head + `<section class="tile c hero" style="min-height:160px"><span class="lbl">${CUR}</span><span class="val">لا يوجد مبلغ مستحق</span><a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-receipts">الإيصالات</a></section>`;
+  if (t.status === 'receipt') {
+    const r = reviewReceipt(t);
+    return head + `<section class="tile c t3" style="min-height:160px"><span class="lbl">${CUR}</span><span class="val">إيصالك قيد المراجعة</span><span style="font-weight:600">سيصلك تأكيد عندما يراجعه المالك.</span>${r && r.img ? `<button class="btn soft" style="align-self:flex-start" data-view-rc="${r.id}">عرض الإيصال المرفوع</button>` : ''}</section>`;
+  }
+  return head + `<div class="grid" style="grid-auto-rows:auto;margin-bottom:16px">
+      <section class="tile c t2 s2"><span class="lbl">المبلغ المستحق · ${CUR}</span><span class="val"><span class="num">${fmt(t.rent)}</span> ر.ع.</span><span style="font-weight:600">${esc(t.status === 'late' ? t.note : 'يستحق في ' + t.due)} · ${esc(place(t.unitId))}</span></section>
+      <section class="tile s2"><h2>حساب المالك للتحويل</h2><div class="bank"><span>البنك</span><b>بنك مسقط</b><span>اسم الحساب</span><b>سالم العبري (مثال)</b><span>IBAN</span><b class="num" dir="ltr" style="text-align:right">OM00 0000 0000 0000 0000 000</b><span>المرجع</span><b>${esc(place(t.unitId))}</b></div></section>
+    </div>
+    <div class="methods">
+      <button type="button" class="method main" data-card><b>الدفع بالبطاقة</b><span class="mut">فيزا · ماستركارد · Apple Pay</span></button>
+      <button type="button" class="method" data-transfer><b>رفع إيصال تحويل</b><span class="mut">حوّلت المبلغ؟ ارفع صورة الإيصال ليراجعها المالك.</span></button>
+    </div>`;
+}
+
+function tRequests() {
+  const t = me(); if (!t) return noTenant();
+  const jobs = db.jobs.filter((j) => j.unitId === t.unitId).sort((a, b) => STEP[a.status] - STEP[b.status]);
+  return `<div class="tools"><h1>طلباتي</h1><div class="bars">${whoSel()}<button class="btn" data-new-req>طلب صيانة جديد</button></div></div>
+    <div class="cols" style="grid-template-columns:minmax(0,1fr)">${jobs.map((j) => `<section class="tile">${jobCard(j)}</section>`).join('') || '<section class="tile empty">لا توجد طلبات بعد.</section>'}</div>`;
+}
+
+function tReceipts() {
+  const t = me(); if (!t) return noTenant();
+  const rs = [...receiptsOf(t)].reverse();
+  const logo = '<svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg>';
+  return `<div class="tools"><h1>الإيصالات</h1><div class="bars">${whoSel()}<button class="btn soft" data-print>طباعة</button></div></div>
+    <div class="receipts">${rs.map((r) => `<button type="button" class="rc" ${r.img ? `data-view-rc="${r.id}"` : 'tabindex="-1"'}>
+      <span class="rlogo">${logo}سكن</span>
+      <span class="lblr">إيصال إيجار</span>
+      <b style="font-size:20px">${esc(r.month)}</b>
+      <span style="font-size:14px">${esc(t.name)} · ${esc(place(t.unitId))}</span>
+      <span style="font-size:12px;color:#55585F">${esc(r.method)} · ${esc(r.date)}${r.img ? ' · صورة مرفقة' : ''}</span>
+      <span class="amt ${r.status === 'review' ? 'wait' : ''}"><span class="num">${fmt(r.amount)}</span> ر.ع. · ${r.status === 'review' ? 'قيد المراجعة' : 'مدفوع'}</span>
+    </button>`).join('') || '<section class="tile empty">لا توجد إيصالات بعد.</section>'}</div>`;
+}
+
+const CATS = [['تكييف', '❄️'], ['سباكة', '🚿'], ['كهرباء', '💡'], ['أبواب وأقفال', '🔑'], ['إزعاج', '🔊'], ['أخرى', '➕']];
+function newRequest() {
+  const t = me(); if (!t) return;
+  sheetSave = async (v) => {
+    const photo = await readImage(v.photo);
+    const cat = v.cat || 'أخرى';
+    db.jobs.push({ id: uid('j'), title: (v.title || '').trim() || cat, cat, desc: (v.desc || '').trim(), unitId: t.unitId, by: t.id, from: `${t.name} · في التطبيق${photo ? ' · صورة' : ''}`, status: 'new', photo, urgent: v.urgent === 'yes', date: today() });
+    toast('تم إرسال طلبك للمالك');
+    if (location.hash !== '#t-requests') location.hash = '#t-requests';
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>طلب صيانة جديد</h2>
+    <div class="cats" role="radiogroup" aria-label="نوع المشكلة">${CATS.map(([c, i], k) => `<label><input type="radio" name="cat" value="${c}" ${k === 0 ? 'checked' : ''}><span><i aria-hidden="true">${i}</i>${c}</span></label>`).join('')}</div>
+    <label for="f-title">عنوان قصير<input id="f-title" name="title" placeholder="مثال: المكيف لا يبرد" required></label>
+    <label for="f-desc">التفاصيل<textarea id="f-desc" name="desc" placeholder="متى بدأت المشكلة؟ وأين بالضبط؟"></textarea></label>
+    <label class="drop" for="f-photo"><span class="ph" aria-hidden="true">📷</span><span id="photoTxt">أضف صورة (اختياري)</span><input id="f-photo" name="photo" type="file" accept="image/*"></label>
+    <label for="f-urgent">الأولوية<select id="f-urgent" name="urgent"><option value="no">عادي</option><option value="yes">عاجل</option></select></label>
+    <div class="acts"><button class="btn" type="submit">إرسال الطلب</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function uploadTransfer() {
+  const t = me(); if (!t) return;
+  sheetSave = async (v) => {
+    const img = await readImage(v.photo);
+    if (!img) { toast('لم نتمكن من قراءة الصورة. جرّب صورة أخرى.'); return; }
+    receiptsOf(t).push({ id: uid('r'), month: CUR, amount: Number(v.amount) || t.rent, date: today(), method: 'تحويل بنكي', status: 'review', img });
+    t.status = 'receipt'; t.note = 'إيصال للمراجعة';
+    toast('تم رفع الإيصال. سيراجعه المالك.');
+    location.hash = '#t-home';
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>رفع إيصال التحويل</h2>
+    <label for="f-amount">المبلغ المحوّل (ر.ع.)<input id="f-amount" name="amount" type="number" min="0" value="${t.rent}" required></label>
+    <label class="drop" for="f-photo"><span class="ph" aria-hidden="true">🧾</span><span id="photoTxt">اختر صورة الإيصال</span><input id="f-photo" name="photo" type="file" accept="image/*" required></label>
+    <div class="acts"><button class="btn" type="submit">إرسال للمالك</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function cardPay() {
+  const t = me(); if (!t) return;
+  sheetSave = () => { markPaid(t.id, 'بطاقة (تجريبي)'); location.hash = '#t-receipts'; };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>الدفع بالبطاقة</h2>
+    <p style="margin:0">في النسخة الحقيقية تفتح هنا صفحة دفع آمنة من بوابة دفع عُمانية، ويصل المبلغ لحساب المالك مباشرة ويُسجَّل الإيصال تلقائيًا.</p>
+    <p class="mut" style="margin:0">هذه نسخة تجريبية ولن يتم خصم أي مبلغ.</p>
+    <div class="kvs"><div class="kv"><span class="mut">المبلغ</span><b><span class="num">${fmt(t.rent)}</span> ر.ع.</b></div><div class="kv"><span class="mut">الوحدة</span><b>${esc(place(t.unitId))}</b></div></div>
+    <div class="acts"><button class="btn" type="submit">محاكاة دفع ناجح</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function findReceipt(rid) { for (const t of db.tenants) { const r = (t.receipts || []).find((x) => x.id === rid); if (r) return [t, r]; } return []; }
 
 /* ---------- Router ---------- */
 function route() {
   const h = location.hash.slice(1);
   if (h.startsWith('building-')) return ['buildings', building(h.slice(9))];
-  const pages = { overview, rent, buildings, maintenance, prefs };
+  const pages = { overview, rent, buildings, maintenance, prefs, 't-home': tHome, 't-pay': tPay, 't-requests': tRequests, 't-receipts': tReceipts };
   const p = pages[h] ? h : 'overview';
   return [p, pages[p]()];
 }
 function render() {
   const [page, html] = route();
+  const ten = page.startsWith('t-');
+  document.body.classList.toggle('tenant', ten);
+  const mt = $('#mtag'); if (mt) mt.textContent = ten ? 'بوابة المستأجر' : 'كل عقاراتك في مكان واحد';
   $('#view').innerHTML = html;
   moveIndicator();
   document.querySelectorAll('.links a').forEach((a) => a.classList.toggle('on', a.dataset.page === page));
@@ -329,7 +511,17 @@ document.addEventListener('click', (e) => {
   if (d.setTheme) { document.documentElement.dataset.mode = d.setTheme; save('sakan-theme', d.setTheme); }
   else if (d.setStyle) { document.documentElement.dataset.style = d.setStyle; save('sakan-style', d.setStyle); }
   else if (d.filter) { rentFilter = d.filter; }
-  else if (d.pay) { markPaid(d.pay); persist(); render(); if (openUnitId) openUnit(openUnitId); return; }
+  else if (d.pay) { const inSheet = b.closest('#sheet') && !openUnitId; markPaid(d.pay); persist(); if (inSheet) closeSheet(); render(); if (openUnitId) openUnit(openUnitId); return; }
+  else if ('newReq' in d) { newRequest(); return; }
+  else if ('transfer' in d) { uploadTransfer(); return; }
+  else if ('card' in d) { cardPay(); return; }
+  else if ('print' in d) { window.print(); return; }
+  else if (d.viewRc) {
+    const [t, r] = findReceipt(d.viewRc); if (!r || !r.img) return;
+    const ownerSide = !document.body.classList.contains('tenant') && r.status === 'review';
+    showImage(r.img, `إيصال ${t.name} · ${r.month}`, ownerSide ? `<button class="btn" data-pay="${t.id}">تأكيد الدفع</button>` : '');
+    return;
+  }
   else if (d.remind) { toast('تم إرسال تذكير إلى ' + tOf(d.remind).name + ' (تجريبي)'); return; }
   else if ('remindAll' in d) { toast('تم إرسال ' + totals().unpaid.length + ' تذكيرات (تجريبي)'); return; }
   else if ('addTenant' in d) { if (!d.addTenant) openUnitId = null; addTenant(d.addTenant); return; }
@@ -403,7 +595,18 @@ document.addEventListener('submit', (e) => {
   e.preventDefault();
   const v = Object.fromEntries(new FormData(e.target).entries());
   const fn = sheetSave; closeSheet();
-  if (fn) { fn(v); persist(); render(); const u = openUnitId && unitOf(openUnitId); if (u && location.hash.startsWith('#building-')) openUnit(u.id); else openUnitId = null; }
+  if (fn) {
+    const r = fn(v);
+    if (r && r.then) { r.then(() => { if (!persist()) toast('مساحة المتصفح ممتلئة، لم تُحفظ الصورة.'); render(); }); return; }
+    persist(); render(); const u = openUnitId && unitOf(openUnitId); if (u && location.hash.startsWith('#building-')) openUnit(u.id); else openUnitId = null; }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'who') { meId = e.target.value; save('sakan-tenant', meId); render(); return; }
+  if (e.target.id === 'f-photo') {
+    const f = e.target.files && e.target.files[0], box = e.target.closest('.drop'); if (!f || !box) return;
+    const old = box.querySelector('img, .ph'); const img = document.createElement('img'); img.alt = ''; img.src = URL.createObjectURL(f);
+    if (old) old.replaceWith(img); const tx = $('#photoTxt'); if (tx) tx.textContent = f.name;
+  }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) { closeSheet(); openUnitId = null; } });
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') { closeSheet(); openUnitId = null; } });

@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>سكن · معاينة الجوال</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&display=swap">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap">
 <style>
 :root{--bg:#EEF0F3;--fg:#0C0C0E;--mut:#55585F;--frame:#111214;--chip:#FFFFFF}
 @media (prefers-color-scheme:dark){:root{--bg:#0C0C0E;--fg:#F2F3F5;--mut:#A3A8B3;--frame:#2A2C31;--chip:#1A1B20;color-scheme:dark}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 'Readex Pro','Segoe UI',Tahoma,sans-serif;padding:24px 16px 40px}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 'Noto Kufi Arabic','Segoe UI',Tahoma,sans-serif;padding:24px 16px 40px}
 header{max-width:1000px;margin:0 auto 24px;display:flex;flex-wrap:wrap;gap:12px;align-items:end;justify-content:space-between}
 h1{margin:0;font-size:28px}
 p{margin:4px 0 0;color:var(--mut)}
@@ -38,8 +39,8 @@ figcaption span{display:block;font-weight:400;font-size:13px;color:var(--mut);te
   <nav class="links" aria-label="روابط"><a href="./">فتح التطبيق</a><a href="#" id="reload">إعادة التحميل</a></nav>
 </header>
 <div class="row">
-  <figure><div class="scale"><div class="phone ios"><span class="island" aria-hidden="true"></span><iframe src="./?v=ios#overview" title="سكن على آيفون"></iframe></div></div><figcaption>آيفون<span>393 × 852</span></figcaption></figure>
-  <figure><div class="scale"><div class="phone android"><span class="punch" aria-hidden="true"></span><iframe src="./?v=android#rent" title="سكن على أندرويد"></iframe></div></div><figcaption>أندرويد<span>412 × 915</span></figcaption></figure>
+  <figure><div class="scale"><div class="phone ios"><span class="island" aria-hidden="true"></span><iframe src="./?v=ios#overview" title="سكن على آيفون"></iframe></div></div><figcaption>آيفون · المالك<span>393 × 852</span></figcaption></figure>
+  <figure><div class="scale"><div class="phone android"><span class="punch" aria-hidden="true"></span><iframe src="./?v=android#t-home" title="بوابة المستأجر على أندرويد"></iframe></div></div><figcaption>أندرويد · المستأجر<span>412 × 915</span></figcaption></figure>
 </div>
 <script>
 document.getElementById('reload').addEventListener('click', function (e) { e.preventDefault(); document.querySelectorAll('iframe').forEach(function (f) { f.src = f.src; }); });
