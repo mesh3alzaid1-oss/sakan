@@ -26,19 +26,19 @@
 /* ---------- Vivid · light ---------- */
 :root[data-style="vivid"][data-mode="light"]{
   color-scheme: light;
-  --bg: radial-gradient(520px 420px at 22% 22%, rgba(198,243,107,.75) 0%, rgba(198,243,107,0) 70%), radial-gradient(360px 300px at 48% 45%, rgba(96,165,250,.6) 0%, rgba(96,165,250,0) 70%), radial-gradient(380px 320px at 70% 48%, rgba(45,212,191,.55) 0%, rgba(45,212,191,0) 70%), #F4F4F1;
-  --fg:#0C0C0E; --mut:#55585F; --link:#1D4ED8; --brand:#0C0C0E;
-  --glass: rgba(255,255,255,.55); --row: rgba(255,255,255,.5); --line: rgba(12,12,14,.08);
-  --border: rgba(255,255,255,.8); --hl: rgba(255,255,255,.9); --shadow: rgba(12,12,14,.08);
-  --hero: rgba(198,243,107,.55); --heroFg:#0C0C0E; --heroGlow: rgba(150,200,40,.35); --blk: rgba(12,12,14,.85);
-  --t2: rgba(45,212,191,.5); --t2Fg:#042F2B; --t2Glow: rgba(20,180,160,.3);
-  --t3: rgba(96,165,250,.5); --t3Fg:#0B1B3F; --t3Glow: rgba(60,130,240,.3);
-  --t4: rgba(255,255,255,.55); --t4Fg:#0C0C0E;
-  --active:#C6F36B; --activeFg:#0C0C0E; --btn:#0C0C0E; --btnFg:#FFFFFF;
-  --lateBg:#FFE3DD; --lateFg:#8B2323; --dueBg:#FFF1D6; --dueFg:#7A4410;
-  --okBg:#E6F7C9; --okFg:#2F5A0B; --newBg:#E3EEFF; --newFg:#1D4ED8;
-  --segBg: rgba(12,12,14,.06); --segOn:#FFFFFF;
-  --gray: rgba(120,125,135,.16); --grayFg:#1F2228; --chip: rgba(255,255,255,.75); --b4: rgba(203,213,225,.6); --b4Fg:#1F2228; --b4Glow: rgba(100,116,139,.2); --vac: rgba(12,12,14,.04); --overlay: rgba(12,12,14,.35); --sheet:#FFFFFF; --input: rgba(12,12,14,.05);
+  --bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cg opacity='.07'%3E%3Cpath d='M14 28a14 14 0 0 0 28 0' fill='none' stroke='%231E1B16' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M28 12l4.5 4.5-4.5 4.5-4.5-4.5z' fill='%231E1B16'/%3E%3C/g%3E%3C/svg%3E"), radial-gradient(520px 420px at 22% 22%, rgba(198,243,107,.55) 0%, rgba(198,243,107,0) 70%), radial-gradient(380px 320px at 70% 48%, rgba(45,212,191,.28) 0%, rgba(45,212,191,0) 70%), linear-gradient(180deg, #F7F1E5 0%, #F1E8D8 100%);
+  --fg:#16130E; --mut:#6B6253; --link:#1F5A3C; --brand:#16130E;
+  --glass: rgba(255,251,243,.72); --row: rgba(255,251,243,.7); --line: rgba(60,45,20,.09);
+  --border: rgba(255,251,243,.9); --hl: rgba(255,255,255,.9); --shadow: rgba(80,60,25,.10);
+  --hero: rgba(198,243,107,.7); --heroFg:#16130E; --heroGlow: rgba(150,200,40,.3); --blk: rgba(22,19,14,.85);
+  --t2: rgba(45,212,191,.45); --t2Fg:#042F2B; --t2Glow: rgba(20,180,160,.22);
+  --t3: rgba(232,201,168,.75); --t3Fg:#3A2A14; --t3Glow: rgba(180,130,70,.2);
+  --t4: rgba(255,251,243,.72); --t4Fg:#16130E;
+  --active:#C6F36B; --activeFg:#0C0C0E; --btn:#16130E; --btnFg:#FBF6EC;
+  --lateBg:#F8DCD2; --lateFg:#8B2323; --dueBg:#F3E3C3; --dueFg:#7A4410;
+  --okBg:#E3F2C6; --okFg:#2F5A0B; --newBg:#DDEBDD; --newFg:#1F5A3C;
+  --segBg: rgba(60,45,20,.07); --segOn:#FFFBF3;
+  --gray: rgba(205,190,158,.38); --grayFg:#2A2216; --chip: rgba(255,251,243,.8); --b4: rgba(205,190,158,.55); --b4Fg:#2A2216; --b4Glow: rgba(150,120,70,.18); --vac: rgba(60,45,20,.05); --overlay: rgba(40,30,15,.35); --sheet:#FBF6EC; --input: rgba(120,90,40,.08);
 }
 /* ---------- Omani · light ---------- */
 :root[data-style="omani"][data-mode="light"]{
@@ -333,7 +333,7 @@ body.tenant .side.owner,body:not(.tenant) .side.tnav{display:none}
 .bank{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
 .bank span:nth-child(odd){color:var(--mut)}
 .receipts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-.rc{position:relative;overflow:hidden;border-radius:22px;padding:20px;background:#FFFFFF;color:#0C0C0E;box-shadow:0 14px 40px var(--shadow);display:flex;flex-direction:column;gap:6px;border:0;text-align:right}
+.rc{position:relative;overflow:hidden;border-radius:22px;padding:20px;background:#FBF6EC;color:#0C0C0E;box-shadow:0 14px 40px var(--shadow);display:flex;flex-direction:column;gap:6px;border:0;text-align:right}
 .rc::before{content:"";position:absolute;inset:0;opacity:.07;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M12 24a12 12 0 0 0 24 0' fill='none' stroke='%230C0C0E' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M24 10l4 4-4 4-4-4z' fill='%230C0C0E'/%3E%3C/svg%3E");pointer-events:none}
 .rc>*{position:relative}
 .rc .lblr{font-size:12px;color:#55585F;letter-spacing:.04em}
