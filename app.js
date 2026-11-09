@@ -437,7 +437,22 @@ function tReceipts() {
     </button>`).join('') || '<section class="tile empty">لا توجد إيصالات بعد.</section>'}</div>`;
 }
 
-const CATS = [['تكييف', '❄️'], ['سباكة', '🚿'], ['كهرباء', '💡'], ['أبواب وأقفال', '🔑'], ['إزعاج', '🔊'], ['أخرى', '➕']];
+const LI = (d) => `<b class="dw" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg><em></em></b>`;
+const CATS = [
+  ['تكييف', '<path d="M12 2v20M4 6.5l16 11M20 6.5l-16 11"/><path d="M9 3.5l3 2 3-2M9 20.5l3-2 3 2"/>'],
+  ['سباكة', '<path d="M12 3c3.5 4.2 6 7.4 6 10.5A6 6 0 0 1 6 13.5C6 10.4 8.5 7.2 12 3z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/>'],
+  ['كهرباء', '<path d="M13 2L5 13.5h6L10 22l8-11.5h-6z"/>'],
+  ['أبواب وأقفال', '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/>'],
+  ['إزعاج', '<path d="M4 9.5v5h4l5 4.5v-14L8 9.5z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>'],
+  ['أخرى', '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>']
+];
+const I_CAM = '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>';
+const I_RCPT = '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>';
+const svgI = (d, s = 18, w = 2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const PRIO = [
+  ['no', 'عادي', 'خلال يومين إلى ثلاثة', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'],
+  ['yes', 'عاجل', 'تسرّب، كهرباء، لا يوجد ماء', '<path d="M13 2L5 13.5h6L10 22l8-11.5h-6z"/>']
+];
 function newRequest() {
   const t = me(); if (!t) return;
   sheetSave = async (v) => {
@@ -448,11 +463,11 @@ function newRequest() {
     if (location.hash !== '#t-requests') location.hash = '#t-requests';
   };
   $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>طلب صيانة جديد</h2>
-    <div class="cats" role="radiogroup" aria-label="نوع المشكلة">${CATS.map(([c, i], k) => `<label><input type="radio" name="cat" value="${c}" ${k === 0 ? 'checked' : ''}><span><i aria-hidden="true">${i}</i>${c}</span></label>`).join('')}</div>
+    <div class="cats" role="radiogroup" aria-label="نوع المشكلة">${CATS.map(([c, i], k) => `<label><input type="radio" name="cat" value="${c}" ${k === 0 ? 'checked' : ''}><span>${LI(i)}${c}</span></label>`).join('')}</div>
     <label for="f-title">عنوان قصير<input id="f-title" name="title" placeholder="مثال: المكيف لا يبرد" required></label>
     <label for="f-desc">التفاصيل<textarea id="f-desc" name="desc" placeholder="متى بدأت المشكلة؟ وأين بالضبط؟"></textarea></label>
-    <label class="drop" for="f-photo"><span class="ph" aria-hidden="true">📷</span><span id="photoTxt">أضف صورة (اختياري)</span><input id="f-photo" name="photo" type="file" accept="image/*"></label>
-    <label for="f-urgent">الأولوية<select id="f-urgent" name="urgent"><option value="no">عادي</option><option value="yes">عاجل</option></select></label>
+    <label class="drop" for="f-photo"><span class="ph" aria-hidden="true">${LI(I_CAM)}</span><span id="photoTxt">أضف صورة (اختياري)</span><input id="f-photo" name="photo" type="file" accept="image/*"></label>
+    <fieldset class="prio"><legend>الأولوية</legend><div class="pcards">${PRIO.map(([v, t, h, d], k) => `<label><input type="radio" name="urgent" value="${v}" ${k === 0 ? 'checked' : ''}><span class="pc ${v === 'yes' ? 'hot' : ''}"><b class="ic">${svgI(d)}</b><b>${t}</b><small>${h}</small></span></label>`).join('')}</div></fieldset>
     <div class="acts"><button class="btn" type="submit">إرسال الطلب</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
   $('#sheet').hidden = false;
 }
@@ -468,7 +483,7 @@ function uploadTransfer() {
   };
   $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>رفع إيصال التحويل</h2>
     <label for="f-amount">المبلغ المحوّل (ر.ع.)<input id="f-amount" name="amount" type="number" min="0" value="${t.rent}" required></label>
-    <label class="drop" for="f-photo"><span class="ph" aria-hidden="true">🧾</span><span id="photoTxt">اختر صورة الإيصال</span><input id="f-photo" name="photo" type="file" accept="image/*" required></label>
+    <label class="drop" for="f-photo"><span class="ph" aria-hidden="true">${LI(I_RCPT)}</span><span id="photoTxt">اختر صورة الإيصال</span><input id="f-photo" name="photo" type="file" accept="image/*" required></label>
     <div class="acts"><button class="btn" type="submit">إرسال للمالك</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
   $('#sheet').hidden = false;
 }

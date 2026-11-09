@@ -294,14 +294,36 @@ body.tenant .side.owner,body:not(.tenant) .side.tnav{display:none}
 .cats label{position:relative;display:block;cursor:pointer}
 .cats input{position:absolute;opacity:0;inset:0}
 .cats span{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border-radius:16px;background:var(--input);font-size:13px;font-weight:600;color:var(--fg);text-align:center;transition:transform .15s}
-.cats span i{font-style:normal;font-size:20px}
+/* line icon with the lime dot of ن */
+.dw{position:relative;display:block;width:26px;height:26px}
+.dw svg{display:block}
+.dw em{position:absolute;top:-3px;left:-4px;width:8px;height:8px;background:var(--dotc,#C6F36B);transform:rotate(45deg);border-radius:1px}
+:root[data-mode="light"]{--dotc:#7DB32A}
+.cats input:checked+span .dw em{background:var(--activeFg)}
+.drop .ph .dw{width:26px;height:26px}
+/* priority cards */
+.prio{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.prio legend{font-size:13px;font-weight:600;color:var(--mut);padding:0;margin-bottom:4px}
+.pcards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pcards label{position:relative;display:block;cursor:pointer}
+.pcards input{position:absolute;opacity:0;inset:0}
+.pc{display:flex;flex-direction:column;gap:4px;padding:14px;border-radius:18px;background:var(--input);color:var(--fg);transition:transform .18s cubic-bezier(.3,.7,.2,1.4),background .2s}
+.pc small{font-size:11px;color:var(--mut);line-height:1.6}
+.pc .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--row)}
+.pcards input:checked+.pc{background:var(--active);color:var(--activeFg)}
+.pcards input:checked+.pc small{color:inherit;opacity:.75}
+.pcards input:checked+.pc .ic{background:var(--activeFg);color:var(--active)}
+.pcards input:checked+.pc.hot{background:#FF8A65;color:#2A0D04}
+.pcards input:checked+.pc.hot .ic{background:#2A0D04;color:#FF8A65}
+.pcards input:focus-visible+.pc{outline:2px solid var(--link);outline-offset:2px}
+.pcards label:active .pc{transform:scale(.97)}
 .cats input:checked+span{background:var(--active);color:var(--activeFg)}
 .cats input:focus-visible+span{outline:2px solid var(--link);outline-offset:2px}
 .panel textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--input);border:0;border-radius:12px;padding:10px 12px;min-height:90px;resize:vertical}
 .drop{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:var(--input);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer}
 .drop input{position:absolute;width:1px;height:1px;opacity:0}
 .drop img{width:56px;height:56px;border-radius:10px;object-fit:cover}
-.drop .ph{width:56px;height:56px;border-radius:10px;display:grid;place-items:center;background:var(--row);font-size:22px;flex:none}
+.drop .ph{width:56px;height:56px;border-radius:10px;display:grid;place-items:center;background:var(--row);flex:none;color:var(--fg)}
 .methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .method{border:0;text-align:right;border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:6px;background:var(--glass);color:var(--fg);box-shadow:0 10px 30px var(--shadow);-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);transition:transform .18s cubic-bezier(.3,.7,.2,1.4)}
 .method:active{transform:scale(.97)}
