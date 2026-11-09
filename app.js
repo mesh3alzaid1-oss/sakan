@@ -221,7 +221,7 @@ function rent() {
   const tab = (k, n) => `<button type="button" role="tab" data-filter="${k}" class="${rentFilter === k ? 'on' : ''}" aria-selected="${rentFilter === k}">${n}</button>`;
   const rows = list.map((x) => {
     const pay = x.status === 'paid' ? '' : `<button class="btn small" data-pay="${x.id}">${x.status === 'receipt' ? 'تأكيد الدفع' : 'تم الدفع'}</button> <button class="btn soft small" data-remind="${x.id}">تذكير</button>`;
-    return `<tr><td><b>${esc(x.name)}</b></td><td class="mut">${esc(place(x.unitId))}</td><td><span class="num">${fmt(x.rent)}</span> ر.ع.</td><td>${esc(x.due)}</td><td>${pill(x)}</td><td>${pay} <button class="btn soft small" data-edit="${x.id}">تعديل</button> <button class="btn danger small" data-del="${x.id}">حذف</button></td></tr>`;
+    return `<tr><td data-label="المستأجر"><span class="v"><b>${esc(x.name)}</b></span></td><td data-label="الوحدة" class="mut"><span class="v">${esc(place(x.unitId))}</span></td><td data-label="الإيجار"><span class="v"><span class="num">${fmt(x.rent)}</span> ر.ع.</span></td><td data-label="الاستحقاق"><span class="v">${esc(x.due)}</span></td><td data-label="الحالة"><span class="v">${pill(x)}</span></td><td class="rowacts">${pay} <button class="btn soft small" data-edit="${x.id}">تعديل</button> <button class="btn danger small" data-del="${x.id}">حذف</button></td></tr>`;
   }).join('');
   return `<div class="tools">
       <div class="segtabs" role="tablist" aria-label="تصفية المستأجرين"><span class="ind" aria-hidden="true"></span>${tab('all', 'الكل <span class="num">' + db.tenants.length + '</span>')}${tab('paid', 'دفع <span class="num">' + count('paid') + '</span>')}${tab('unpaid', 'لم يدفع <span class="num">' + count('unpaid') + '</span>')}${tab('late', 'متأخر <span class="num">' + count('late') + '</span>')}</div>
@@ -301,7 +301,8 @@ function prefs() {
     <div class="choice">${opt('vivid', 'ملوّن', 'مربعات زجاجية بألوان زاهية وقائمة جانبية.', ['#C6F36B', '#2DD4BF', '#60A5FA'])}${opt('omani', 'عُماني', 'ألوان الرمل والأخضر والطيني وقائمة علوية.', ['#34503F', '#B4532A', '#CDBE9E'])}</div></section>
   <section class="tile" style="margin-bottom:16px"><h2>المظهر</h2>
     <div class="seg" style="max-width:260px"><button type="button" data-set-theme="light" class="${th === 'light' ? 'on' : ''}">فاتح</button><button type="button" data-set-theme="dark" class="${th === 'dark' ? 'on' : ''}">داكن</button></div></section>
-  <section class="tile"><h2>البيانات</h2><p class="mut" style="margin:0">تُحفظ تغييراتك في هذا المتصفح فقط.</p><button class="btn danger" style="align-self:flex-start" data-reset>إعادة البيانات التجريبية</button></section>`;
+  <section class="tile" style="margin-bottom:16px"><h2>البيانات</h2><p class="mut" style="margin:0">تُحفظ تغييراتك في هذا المتصفح فقط.</p><button class="btn danger" style="align-self:flex-start" data-reset>إعادة البيانات التجريبية</button></section>
+  <section class="tile about"><span class="brand" style="padding:0">سكن</span><b style="font-size:18px">كل عقاراتك في مكان واحد</b><p style="margin:0;max-width:60ch">سكن يجمع مبانيك ووحداتك ومستأجريك في شاشة واحدة: من دفع ومن لم يدفع، الوحدات الشاغرة، وطلبات الصيانة. ويمكن ربطه بلينا، المساعدة الصوتية من CUE، لتسجيل طلبات المستأجرين من الهاتف.</p><span class="mut" style="font-size:13px">من تطوير CUE · فريق من مسقط يصمم المواقع والتطبيقات ووكلاء الذكاء الاصطناعي للشركات.</span><span class="mut" style="font-size:12px">نسخة تجريبية · كل الأسماء والمبالغ أمثلة.</span></section>`;
 }
 
 /* ---------- Router ---------- */
@@ -317,7 +318,8 @@ function render() {
   $('#view').innerHTML = html;
   moveIndicator();
   document.querySelectorAll('.links a').forEach((a) => a.classList.toggle('on', a.dataset.page === page));
-  document.querySelectorAll('.side [data-set-theme]').forEach((b) => b.classList.toggle('on', b.dataset.setTheme === document.documentElement.dataset.mode));
+  document.querySelectorAll('.side [data-set-theme], .mhead [data-set-theme]').forEach((b) => b.classList.toggle('on', b.dataset.setTheme === document.documentElement.dataset.mode));
+  const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.content = getComputedStyle(document.documentElement).getPropertyValue('--sheet').trim() || '#0C0C0E';
 }
 
 document.addEventListener('click', (e) => {
