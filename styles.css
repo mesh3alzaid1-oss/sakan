@@ -9,19 +9,19 @@
 /* ---------- Vivid · dark ---------- */
 :root[data-style="vivid"][data-mode="dark"]{
   color-scheme: dark;
-  --bg: radial-gradient(520px 420px at 22% 22%, rgba(198,243,107,.45) 0%, rgba(198,243,107,0) 70%), radial-gradient(360px 300px at 48% 45%, rgba(96,165,250,.45) 0%, rgba(96,165,250,0) 70%), radial-gradient(380px 320px at 70% 48%, rgba(45,212,191,.4) 0%, rgba(45,212,191,0) 70%), #0C0C0E;
-  --fg:#F2F3F5; --mut:#A3A8B3; --link:#9CC8FF; --brand:#F2F3F5;
-  --glass: rgba(255,255,255,.06); --row: rgba(255,255,255,.04); --line: rgba(255,255,255,.08);
-  --border: rgba(255,255,255,.1); --hl: rgba(255,255,255,.12); --shadow: rgba(0,0,0,.4);
-  --hero: rgba(198,243,107,.4); --heroFg:#F4FFE0; --heroGlow: rgba(198,243,107,.25); --blk: rgba(244,255,224,.85);
-  --t2: rgba(45,212,191,.38); --t2Fg:#EFFFFC; --t2Glow: rgba(45,212,191,.22);
-  --t3: rgba(96,165,250,.4); --t3Fg:#EEF5FF; --t3Glow: rgba(96,165,250,.22);
-  --t4: rgba(255,255,255,.06); --t4Fg:#F2F3F5;
+  --bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cg opacity='.06'%3E%3Cpath d='M14 28a14 14 0 0 0 28 0' fill='none' stroke='%23F3EBDD' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M28 12l4.5 4.5-4.5 4.5-4.5-4.5z' fill='%23F3EBDD'/%3E%3C/g%3E%3C/svg%3E"), radial-gradient(520px 420px at 22% 22%, rgba(198,243,107,.32) 0%, rgba(198,243,107,0) 70%), radial-gradient(380px 320px at 70% 48%, rgba(45,212,191,.26) 0%, rgba(45,212,191,0) 70%), radial-gradient(420px 360px at 45% 85%, rgba(232,201,168,.14) 0%, rgba(232,201,168,0) 70%), linear-gradient(180deg, #17140F 0%, #100E0B 100%);
+  --fg:#F3EBDD; --mut:#B5A994; --link:#D7F79A; --brand:#F3EBDD;
+  --glass: rgba(255,240,215,.06); --row: rgba(255,240,215,.045); --line: rgba(255,240,215,.08);
+  --border: rgba(255,240,215,.1); --hl: rgba(255,240,215,.12); --shadow: rgba(0,0,0,.45);
+  --hero: rgba(198,243,107,.36); --heroFg:#F7FFE6; --heroGlow: rgba(198,243,107,.18); --blk: rgba(247,255,230,.85);
+  --t2: rgba(45,212,191,.32); --t2Fg:#EFFFFC; --t2Glow: rgba(45,212,191,.16);
+  --t3: rgba(232,201,168,.24); --t3Fg:#FBF1E2; --t3Glow: rgba(232,201,168,.1);
+  --t4: rgba(255,240,215,.06); --t4Fg:#F3EBDD;
   --active:#C6F36B; --activeFg:#0C0C0E; --btn:#C6F36B; --btnFg:#0C0C0E;
-  --lateBg: rgba(255,138,101,.18); --lateFg:#FFB199; --dueBg: rgba(255,210,120,.16); --dueFg:#FFD08A;
-  --okBg: rgba(198,243,107,.16); --okFg:#D7F79A; --newBg: rgba(96,165,250,.2); --newFg:#CFE3FF;
-  --segBg: rgba(255,255,255,.06); --segOn: rgba(255,255,255,.16);
-  --gray: rgba(160,165,175,.16); --grayFg:#E4E6EA; --chip: rgba(255,255,255,.1); --b4: rgba(203,213,225,.2); --b4Fg:#F2F3F5; --b4Glow: rgba(203,213,225,.1); --vac: rgba(255,255,255,.03); --overlay: rgba(0,0,0,.55); --sheet:#1A1B20; --input: rgba(255,255,255,.07);
+  --lateBg: rgba(255,138,101,.18); --lateFg:#FFB199; --dueBg: rgba(232,201,168,.16); --dueFg:#F0D2A8;
+  --okBg: rgba(198,243,107,.16); --okFg:#D7F79A; --newBg: rgba(45,212,191,.18); --newFg:#BDF5EA;
+  --segBg: rgba(255,240,215,.06); --segOn: rgba(255,240,215,.15);
+  --gray: rgba(232,201,168,.12); --grayFg:#F3EBDD; --chip: rgba(255,240,215,.1); --b4: rgba(232,201,168,.16); --b4Fg:#F3EBDD; --b4Glow: rgba(232,201,168,.08); --vac: rgba(255,240,215,.03); --overlay: rgba(0,0,0,.55); --sheet:#1D1913; --input: rgba(255,240,215,.07);
 }
 /* ---------- Vivid · light ---------- */
 :root[data-style="vivid"][data-mode="light"]{
@@ -269,7 +269,7 @@ a.tile{text-decoration:none;min-height:190px;transition:transform .15s}
 .mark rect{fill:var(--ink)}
 .mark .cup{fill:none;stroke:var(--paper);stroke-width:8;stroke-linecap:round}
 .mark .dot{fill:var(--lime)}
-:root[data-style="vivid"][data-mode="dark"] .mark rect{fill:#1C1D22}
+:root[data-style="vivid"][data-mode="dark"] .mark rect{fill:#2A241B}
 .dbrand .logo{padding:0 12px}
 .dbrand .brand,.mbrand .brand{padding:0;font-size:24px;line-height:1.4}
 .dbrand .tagline{padding:0 12px}
