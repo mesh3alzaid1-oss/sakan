@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="سكن">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=4">
 <script>
   try {
     var s = localStorage.getItem('sakan-style'), t = localStorage.getItem('sakan-theme');
@@ -26,7 +26,7 @@
 </head>
 <body>
 <header class="mhead">
-  <div class="mbrand"><span class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline" id="mtag">كل عقاراتك في مكان واحد</span></div>
+  <div class="mbrand"><span class="logo"><svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline" id="mtag">كل عقاراتك في مكان واحد</span></div>
   <div class="seg" role="group" aria-label="المظهر">
     <button type="button" data-set-theme="light">فاتح</button>
     <button type="button" data-set-theme="dark">داكن</button>
@@ -34,7 +34,7 @@
 </header>
 <div class="app">
   <nav class="side glass owner" aria-label="قائمة المالك">
-    <div class="dbrand"><span class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline">كل عقاراتك في مكان واحد</span></div>
+    <div class="dbrand"><span class="logo"><svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline">كل عقاراتك في مكان واحد</span></div>
     <div class="links">
       <a href="#overview" data-page="overview"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>نظرة عامة</span></a>
       <a href="#buildings" data-page="buildings"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M15 9h3a2 2 0 0 1 2 2v10M3 21h18M8 7h3M8 11h3M8 15h3"/></svg><span>المباني</span></a>
@@ -51,7 +51,7 @@
     <span class="byline">من تطوير CUE</span>
   </nav>
   <nav class="side glass tnav" aria-label="قائمة المستأجر">
-    <div class="dbrand"><span class="logo"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline">بوابة المستأجر</span></div>
+    <div class="dbrand"><span class="logo"><svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline">بوابة المستأجر</span></div>
     <div class="links">
       <a href="#t-home" data-page="t-home"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>الرئيسية</span></a>
       <a href="#t-pay" data-page="t-pay"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h4"/></svg><span>الدفع</span></a>
@@ -66,6 +66,6 @@
 </div>
 <div id="sheet" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
