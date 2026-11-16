@@ -645,3 +645,9 @@ table.mini th,table.mini td{padding:6px 8px;border-bottom:1px solid var(--line);
 .annrow .grow{display:flex;flex-direction:column;gap:2px;flex:1}
 #sheetless .doc{max-width:860px}
 @media (max-width:760px){.mhead .seg{width:auto}}
+.mmap.offline{background:#F3EBDC}
+:root[data-mode="dark"] .mmap.offline{background:#1E1A14}
+.arealbl{background:none;border:0}
+.arealbl span{display:inline-block;transform:translate(-50%,10px);white-space:nowrap;font:600 12px/1 var(--font);color:var(--mut);text-shadow:0 0 3px var(--sheet),0 0 3px var(--sheet)}
+.arealbl.sea span{font-size:14px;letter-spacing:1px;color:#5E9BAA;text-shadow:none;opacity:.8}
+.mmap.osmdark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9)}

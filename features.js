@@ -21,6 +21,46 @@ function loadLeaflet() {
   });
   return LF;
 }
+/* Background: CARTO tiles, then OpenStreetMap tiles, then a built-in drawing of Muscat that needs no internet */
+const COAST = [[24.05, 57.40], [23.90, 57.70], [23.80, 57.90], [23.74, 58.00], [23.70, 58.10], [23.68, 58.17], [23.655, 58.24], [23.636, 58.28], [23.622, 58.33], [23.613, 58.37], [23.612, 58.42], [23.618, 58.455], [23.624, 58.48], [23.636, 58.50], [23.632, 58.53], [23.626, 58.56], [23.62, 58.59], [23.60, 58.612], [23.57, 58.63], [23.52, 58.70], [23.46, 58.78], [23.30, 58.90], [23.10, 59.10]];
+const ROADS = [
+  [[23.70, 58.02], [23.66, 58.15], [23.625, 58.26], [23.60, 58.33], [23.592, 58.40], [23.597, 58.46], [23.594, 58.52], [23.60, 58.56]],
+  [[23.63, 58.05], [23.59, 58.18], [23.565, 58.30], [23.553, 58.40], [23.56, 58.48], [23.57, 58.55]],
+  [[23.592, 58.40], [23.55, 58.41], [23.50, 58.43]], [[23.597, 58.46], [23.56, 58.48], [23.52, 58.50]]
+];
+function offlineBase(L, map, box) {
+  box.classList.add('offline');
+  const dark = document.documentElement.dataset.mode === 'dark';
+  const sea = [...COAST, [22.90, 59.60], [25.00, 59.60], [25.00, 57.00], [24.20, 57.00]];
+  const g = L.layerGroup().addTo(map);
+  L.polygon(sea, { stroke: false, fillColor: dark ? '#0F2A30' : '#BFDDE6', fillOpacity: 1, interactive: false }).addTo(g);
+  L.polyline(COAST, { color: dark ? '#2E5A5E' : '#8FC1CF', weight: 2, interactive: false }).addTo(g);
+  ROADS.forEach((r, i) => L.polyline(r, { color: dark ? 'rgba(255,240,215,.16)' : '#FFFFFF', weight: i < 2 ? 4 : 2.5, interactive: false }).addTo(g));
+  Object.entries(AREA_LL).forEach(([n, c]) => L.marker(c, { interactive: false, keyboard: false, icon: L.divIcon({ className: 'arealbl', html: `<span>${esc(n)}</span>`, iconSize: null }) }).addTo(g));
+  L.marker([23.78, 58.35], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'arealbl sea', html: '<span>خليج عُمان</span>', iconSize: null }) }).addTo(g);
+  map.attributionControl.addAttribution('خريطة مبسطة من سكن');
+}
+function addBase(L, map, box) {
+  const dark = document.documentElement.dataset.mode === 'dark';
+  const sources = [
+    [`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }, ''],
+    ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }, dark ? 'osmdark' : '']
+  ];
+  let i = 0;
+  const next = () => {
+    if (!document.body.contains(box)) return;
+    if (i >= sources.length) { offlineBase(L, map, box); return; }
+    const [url, opts, cls] = sources[i++];
+    let ok = false, done = false, errs = 0;
+    const layer = L.tileLayer(url, opts).addTo(map);
+    if (cls) box.classList.add(cls);
+    const fail = () => { if (ok || done) return; done = true; map.removeLayer(layer); if (cls) box.classList.remove(cls); next(); };
+    layer.on('tileload', () => { ok = true; });
+    layer.on('tileerror', () => { if (++errs >= 3) fail(); });
+    setTimeout(fail, 6000);
+  };
+  next();
+}
 function drawMap(list) {
   const box = $('#mmap'); if (!box) return;
   loadLeaflet().then((L) => {
@@ -28,8 +68,7 @@ function drawMap(list) {
     if (!mapObj || mapObj.getContainer() !== box) {
       if (mapObj) mapObj.remove();
       mapObj = L.map(box, { scrollWheelZoom: false }).setView([23.6, 58.35], 11);
-      const dark = document.documentElement.dataset.mode === 'dark';
-      L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(mapObj);
+      addBase(L, mapObj, box);
       mapLayer = L.layerGroup().addTo(mapObj);
     }
     mapLayer.clearLayers();
