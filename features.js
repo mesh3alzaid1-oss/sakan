@@ -101,4 +101,299 @@ document.addEventListener('click', (e) => {
   else if (d.mkAccept) { const [lid, qid] = d.mkAccept.split('|'); const l = lOf(lid); const x = l && l.inquiries.find((q) => q.id === qid); if (x) acceptInquiry(l, x); }
 });
 
+
+/* ================= Owner data: contracts, expenses, technicians, history ================= */
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const fromIso = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d, 12); };
+const arDate = (s) => { const d = fromIso(s); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+const daysTo = (s) => Math.round((fromIso(s) - new Date(new Date().toDateString())) / 86400000);
+const EXP_CATS = ['صيانة', 'كهرباء وماء', 'نظافة', 'حراسة', 'تأمين', 'رسوم بلدية', 'أخرى'];
+function seedOwnerExtras() {
+  const now = new Date();
+  const soon = { 'tb1-9': 12, 'tb2-1': 34, 'tb3-1': 51, 'tb1-2': 58 };
+  db.contracts = db.contracts || [];
+  db.tenants.forEach((t, i) => {
+    if (db.contracts.some((c) => c.tenantId === t.id)) return;
+    const end = new Date(now); end.setDate(end.getDate() + (soon[t.id] ?? (70 + ((i * 37) % 280))));
+    const start = new Date(end); start.setFullYear(start.getFullYear() - 1); start.setDate(start.getDate() + 1);
+    const sent = t.id === 'tb4-2' || t.id === 'tb4-4';
+    db.contracts.push({ id: 'c' + t.id, tenantId: t.id, unitId: t.unitId, start: iso(start), end: iso(end), rent: t.rent, deposit: t.rent, status: sent ? 'sent' : 'signed', signedAt: sent ? '' : iso(start) });
+  });
+  if (!db.expenses) {
+    const m = (d) => iso(new Date(now.getFullYear(), now.getMonth() + (d < 0 ? -1 : 0), Math.abs(d) || 1, 12));
+    db.expenses = [
+      ['b1', 'صيانة', 180, 3, 'صيانة دورية للمصعد'], ['b1', 'كهرباء وماء', 95, 5, 'إنارة الممرات والمواقف'], ['b1', 'حراسة', 220, 1, 'حارس الأمن'],
+      ['b2', 'نظافة', 80, 2, 'تنظيف الممرات'], ['b2', 'صيانة', 45, 9, 'تعبئة غاز مكيف'], ['b3', 'صيانة', 120, 6, 'تنسيق الحدائق'], ['b3', 'صيانة', 12, 10, 'إضاءة الحمام · فيلا 5'],
+      ['b4', 'صيانة', 150, 4, 'تنظيف المسبح'], ['b4', 'حراسة', 200, 1, 'حارس الأمن'], ['b4', 'تأمين', 260, 7, 'تأمين المبنى السنوي (قسط)'],
+      ['b1', 'صيانة', 140, -6, 'صيانة دورية للمصعد'], ['b1', 'حراسة', 220, -1, 'حارس الأمن'], ['b2', 'نظافة', 80, -2, 'تنظيف الممرات'], ['b3', 'صيانة', 120, -5, 'تنسيق الحدائق'], ['b4', 'حراسة', 200, -1, 'حارس الأمن'], ['b4', 'صيانة', 150, -4, 'تنظيف المسبح']
+    ].map(([bid, cat, amount, day, note], i) => ({ id: 'e' + i, bid, cat, amount, date: m(day), note }));
+  }
+  if (!db.techs) db.techs = [
+    { id: 'k1', name: 'راشد البلوشي', trade: 'تكييف', rating: 4.9, jobs: 38 }, { id: 'k2', name: 'عمر السيابي', trade: 'سباكة', rating: 4.7, jobs: 25 },
+    { id: 'k3', name: 'أنور حسين', trade: 'كهرباء', rating: 4.8, jobs: 31 }, { id: 'k4', name: 'شركة المصاعد الحديثة', trade: 'مصاعد', rating: 4.5, jobs: 12 },
+    { id: 'k5', name: 'محمود النجار', trade: 'نجارة وأقفال', rating: 4.6, jobs: 17 }
+  ];
+  if (!db.history) {
+    const pcts = [97, 95, 92, 98, 86, 94, 99, 96, 89, 97, 95];
+    const exp = db.tenants.reduce((a, t) => a + Number(t.rent), 0);
+    db.history = pcts.map((p, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { m: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, short: MONTHS[d.getMonth()], exp: Math.round(exp * (0.94 + i * 0.005)), pct: p }; });
+  }
+  persist();
+}
+seedOwnerExtras();
+const contractOf = (tid) => db.contracts.filter((c) => c.tenantId === tid && c.status !== 'renewed').slice(-1)[0];
+const expiring = () => db.contracts.filter((c) => c.status === 'signed' && tOf(c.tenantId) && daysTo(c.end) <= 60 && daysTo(c.end) >= 0).sort((a, b) => a.end.localeCompare(b.end));
+const awaiting = () => db.contracts.filter((c) => c.status === 'sent' && tOf(c.tenantId));
+function onTenantAdded(t) {
+  const s = new Date(); s.setDate(1); s.setMonth(s.getMonth() + 1);
+  const e = new Date(s); e.setFullYear(e.getFullYear() + 1); e.setDate(e.getDate() - 1);
+  db.contracts.push({ id: uid('c'), tenantId: t.id, unitId: t.unitId, start: iso(s), end: iso(e), rent: t.rent, deposit: t.rent, status: 'sent', signedAt: '' });
+  if (typeof notify === 'function') notify(t.id, 'عقد إيجارك جاهز للتوقيع من هاتفك', '#t-contract');
+  persist();
+}
+
+/* ================= Contracts page ================= */
+let cFilter = 'all';
+const CST = { signed: ['ok', 'ساري'], sent: ['due', 'بانتظار التوقيع'], renewed: ['new', 'جُدِّد'], ended: ['late', 'منتهٍ'] };
+function cStatus(c) { if (c.status === 'signed' && daysTo(c.end) < 0) return ['late', 'منتهٍ']; if (c.status === 'signed' && daysTo(c.end) <= 60) return ['late', `ينتهي بعد ${daysTo(c.end)} يومًا`]; return CST[c.status]; }
+function contractsPage() {
+  const all = db.contracts.filter((c) => c.status !== 'renewed' && tOf(c.tenantId));
+  const exp = expiring(), aw = awaiting();
+  const list = cFilter === 'soon' ? exp : cFilter === 'sent' ? aw : all.slice().sort((a, b) => a.end.localeCompare(b.end));
+  const tab = (k, n, c) => `<button type="button" data-cfilter="${k}" class="${cFilter === k ? 'on' : ''}" aria-pressed="${cFilter === k}">${n} <span class="num">${c}</span></button>`;
+  return `<div class="tools"><div><h1>العقود</h1><span class="mut">عقود إيجار إلكترونية يوقّعها المستأجر من هاتفه، مع تذكير قبل انتهاء كل عقد.</span></div><button class="btn" data-c-new>عقد جديد</button></div>
+    <div class="grid" style="grid-auto-rows:auto;margin-bottom:16px">
+      <section class="tile c hero"><span class="lbl">عقود سارية</span><span class="val num">${all.filter((c) => c.status === 'signed').length}</span></section>
+      <section class="tile c ${exp.length ? 't2 alert' : 't2'}"><span class="lbl">تنتهي خلال 60 يومًا</span><span class="val num">${exp.length}</span>${exp[0] ? `<span style="font-size:13px;font-weight:600">أقربها: ${esc(tOf(exp[0].tenantId).name)} · ${arDate(exp[0].end)}</span>` : ''}</section>
+      <section class="tile c t3"><span class="lbl">بانتظار توقيع المستأجر</span><span class="val num">${aw.length}</span></section>
+      <section class="tile gray"><span class="lbl">التأمينات المحفوظة</span><span class="val"><span class="num">${fmt(all.reduce((a, c) => a + Number(c.deposit || 0), 0))}</span> ر.ع.</span></section>
+    </div>
+    <div class="tabs mtabs">${tab('all', 'الكل', all.length)}${tab('soon', 'تنتهي قريبًا', exp.length)}${tab('sent', 'بانتظار التوقيع', aw.length)}</div>
+    <section class="tile"><div class="tbl fade"><table><thead><tr><th>المستأجر</th><th>الوحدة</th><th>المدة</th><th>الإيجار</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>
+    ${list.map((c) => { const t = tOf(c.tenantId); const [cls, txt] = cStatus(c); return `<tr><td data-label="المستأجر"><span class="v"><b>${esc(t.name)}</b></span></td><td data-label="الوحدة" class="mut"><span class="v">${esc(place(c.unitId))}</span></td><td data-label="المدة"><span class="v">${arDate(c.start)} ← ${arDate(c.end)}</span></td><td data-label="الإيجار"><span class="v"><span class="num">${fmt(c.rent)}</span> ر.ع.</span></td><td data-label="الحالة"><span class="v"><span class="pill ${cls}">${txt}</span></span></td><td class="rowacts"><button class="btn soft small" data-c-view="${c.id}">عرض العقد</button>${c.status === 'sent' ? ` <button class="btn soft small" data-c-nudge="${c.id}">تذكير بالتوقيع</button>` : ''}${c.status === 'signed' && daysTo(c.end) <= 60 ? ` <button class="btn small" data-c-renew="${c.id}">تجديد</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">لا توجد عقود هنا.</td></tr>'}
+    </tbody></table></div></section>`;
+}
+function contractDoc(c) {
+  const t = tOf(c.tenantId), u = unitOf(c.unitId), b = u && bOf(u.buildingId);
+  const months = Math.round((fromIso(c.end) - fromIso(c.start)) / (30.44 * 86400000));
+  return `<article class="doc" id="doc">
+    <header><span class="rlogo"><svg class="mark" width="30" height="30" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg>سكن</span><span>رقم العقد: <span class="num">${esc(c.id.toUpperCase().slice(0, 10))}</span></span></header>
+    <h2>عقد إيجار ${esc(b && b.kind === 'محل' ? 'تجاري' : 'سكني')}</h2>
+    <p>أُبرم هذا العقد بتاريخ ${arDate(c.start)} بين:</p>
+    <p><b>المؤجِّر:</b> سالم العبري (مثال) &nbsp;·&nbsp; <b>المستأجر:</b> ${esc(t ? t.name : '')}${t && t.phone ? ` · <span class="num" dir="ltr">${esc(t.phone)}</span>` : ''}</p>
+    <ol>
+      <li><b>العين المؤجَّرة:</b> ${esc(u ? u.label : '')} في ${esc(b ? b.name : '')}، ${esc(b ? b.area : '')}، مسقط.</li>
+      <li><b>المدة:</b> <span class="num">${months}</span> شهرًا، من ${arDate(c.start)} إلى ${arDate(c.end)}، قابلة للتجديد باتفاق الطرفين.</li>
+      <li><b>الأجرة:</b> <span class="num">${fmt(c.rent)}</span> ريال عُماني شهريًا، تُدفع مقدمًا في أول كل شهر عبر تطبيق سكن أو بالتحويل البنكي.</li>
+      <li><b>التأمين:</b> <span class="num">${fmt(c.deposit)}</span> ريال عُماني، يُرد عند نهاية العقد بعد خصم أي أضرار إن وجدت.</li>
+      <li><b>الصيانة:</b> يتحمل المؤجِّر الصيانة الأساسية (التكييف المركزي، السباكة، الكهرباء)، ويُبلَّغ بها عبر التطبيق.</li>
+      <li><b>الخدمات:</b> يتحمل المستأجر فواتير الكهرباء والماء والإنترنت ما لم يُتفق على غير ذلك.</li>
+      <li><b>الإخلاء:</b> يلتزم الطرف الراغب في عدم التجديد بإبلاغ الآخر قبل <span class="num">60</span> يومًا من نهاية المدة.</li>
+      <li><b>القانون:</b> يخضع هذا العقد للقوانين المعمول بها في سلطنة عُمان، ويُسجَّل لدى البلدية المختصة.</li>
+    </ol>
+    <div class="sigs"><div><span class="mut">توقيع المؤجِّر</span><span class="sig owner">سالم العبري</span><small>${arDate(c.start)}</small></div>
+      <div><span class="mut">توقيع المستأجر</span>${c.sig ? `<img class="sig" src="${esc(c.sig)}" alt="توقيع ${esc(t ? t.name : '')}">` : c.status === 'signed' ? `<span class="sig">${esc(t ? t.name : '')}</span>` : '<span class="sig wait">بانتظار التوقيع</span>'}<small>${c.signedAt ? arDate(c.signedAt) : ''}</small></div></div>
+    <footer>نموذج تجريبي من سكن · ليس عقدًا قانونيًا · يُنصح بمراجعة الصيغة النهائية مع مستشار قانوني.</footer>
+  </article>`;
+}
+function viewContract(id, tenantSide) {
+  const c = db.contracts.find((x) => x.id === id); if (!c) return;
+  sheetSave = null;
+  const acts = tenantSide && c.status === 'sent' ? `<button class="btn" data-c-sign="${c.id}">توقيع العقد</button>` : !tenantSide && c.status === 'sent' ? `<button class="btn soft" data-c-nudge="${c.id}">تذكير بالتوقيع</button>` : '';
+  $('#sheet').innerHTML = `<div class="panel pop wide" role="dialog" aria-modal="true" aria-label="عقد الإيجار">${contractDoc(c)}<div class="bars">${acts}<button class="btn soft" data-print-doc>طباعة / حفظ PDF</button><button class="btn soft" data-close>إغلاق</button></div></div>`;
+  $('#sheet').hidden = false;
+}
+function signContract(id) {
+  const c = db.contracts.find((x) => x.id === id); if (!c) return;
+  sheetSave = () => {
+    const cv = window._sigCanvas; if (!cv || !cv._drawn) { toast('ارسم توقيعك أولًا'); return; }
+    c.sig = cv.toDataURL('image/png'); c.status = 'signed'; c.signedAt = iso(new Date());
+    if (typeof notify === 'function') notify('owner', `${tOf(c.tenantId).name} وقّع عقد ${place(c.unitId)}`, '#contracts');
+    toast('تم توقيع العقد. أرسلنا نسخة للمالك.');
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>وقّع العقد</h2><p class="mut" style="margin:0">ارسم توقيعك بإصبعك أو بالماوس داخل المربع.</p>
+    <canvas id="sigpad" class="sigpad" width="640" height="240" aria-label="مربع التوقيع"></canvas>
+    <label class="chk"><input type="checkbox" required> قرأت العقد وأوافق على بنوده</label>
+    <div class="acts"><button class="btn" type="submit">تأكيد التوقيع</button><button class="btn soft" type="button" data-sig-clear>مسح</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+  const cv = $('#sigpad'), g = cv.getContext('2d'); window._sigCanvas = cv;
+  g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#0C0C0E';
+  let down = false;
+  const pt = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height)]; };
+  cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); const [x, y] = pt(e); g.beginPath(); g.moveTo(x, y); });
+  cv.addEventListener('pointermove', (e) => { if (!down) return; const [x, y] = pt(e); g.lineTo(x, y); g.stroke(); cv._drawn = true; });
+  cv.addEventListener('pointerup', () => { down = false; });
+}
+function renewForm(id) {
+  const c = db.contracts.find((x) => x.id === id); const t = tOf(c.tenantId);
+  const f = fair({ type: kindOf(unitOf(c.unitId) || {}), area: (bOf((unitOf(c.unitId) || {}).buildingId) || {}).area, beds: 2, rent: c.rent });
+  openForm('تجديد عقد ' + t.name, [
+    { key: 'rent', label: `الإيجار الجديد (ر.ع.) · الحالي ${fmt(c.rent)} · سعر السوق التقريبي ${fmt(f.lo)}–${fmt(f.hi)}`, type: 'number', value: c.rent, required: true },
+    { key: 'months', label: 'المدة', type: 'pick', value: '12', options: [['6', '6 أشهر'], ['12', 'سنة'], ['24', 'سنتان']].map(([value, label]) => ({ value, label })) }
+  ], (v) => {
+    const s = fromIso(c.end); s.setDate(s.getDate() + 1); const e = new Date(s); e.setMonth(e.getMonth() + Number(v.months)); e.setDate(e.getDate() - 1);
+    c.status = 'renewed';
+    db.contracts.push({ id: uid('c'), tenantId: c.tenantId, unitId: c.unitId, start: iso(s), end: iso(e), rent: Number(v.rent), deposit: c.deposit, status: 'sent', signedAt: '' });
+    if (Number(v.rent) !== Number(c.rent)) t.nextRent = Number(v.rent);
+    if (typeof notify === 'function') notify(t.id, `عرض تجديد عقدك جاهز للتوقيع · ${fmt(v.rent)} ر.ع. شهريًا`, '#t-contract');
+    toast('أُرسل عقد التجديد إلى ' + t.name + ' للتوقيع');
+  }, 'إرسال للتوقيع');
+}
+window.EXTRA_PAGES.contracts = contractsPage;
+
+/* ================= Finance page ================= */
+const monthKey = (d = new Date()) => iso(d).slice(0, 7);
+const curExpenses = () => db.expenses.filter((e) => e.date.slice(0, 7) === monthKey());
+function trendChart() {
+  const t = totals();
+  const rows = [...db.history.slice(-11), { m: CUR, short: MONTHS[new Date().getMonth()], exp: t.expected, pct: t.pct, live: true }];
+  const W = 760, H = 250, P = { l: 8, r: 42, t: 30, b: 30 }, bw = (W - P.l - P.r) / rows.length;
+  const y = (p) => P.t + (H - P.t - P.b) * (1 - p / 100);
+  const bars = rows.map((r, i) => {
+    const low = r.pct < alertAt, x = W - P.r - (i + 1) * bw + 5, w = bw - 10, top = y(r.pct);
+    const col = Math.round(r.exp * r.pct / 100);
+    return `<g class="bar ${low ? 'low' : ''}${r.live ? ' live' : ''}" tabindex="0" role="img" aria-label="${r.m}: ${r.pct}% · ${fmt(col)} من ${fmt(r.exp)} ر.ع.">
+      <rect class="hit" x="${x - 4}" y="${P.t}" width="${w + 8}" height="${H - P.t - P.b}"/>
+      <path d="M${x} ${H - P.b}V${top + 4}a4 4 0 0 1 4-4h${w - 8}a4 4 0 0 1 4 4V${H - P.b}Z"/>
+      ${low ? `<text class="flagt" x="${x + w / 2}" y="${top - 6}" text-anchor="middle">!</text>` : ''}
+      <text class="xl" x="${x + w / 2}" y="${H - 10}" text-anchor="middle">${r.short.slice(0, 3)}</text>
+      <foreignObject x="${Math.min(Math.max(x + w / 2 - 95, 0), W - 190)}" y="${Math.max(top - 62, 0)}" width="190" height="58"><div class="tip" xmlns="http://www.w3.org/1999/xhtml"><b>${r.m}</b><span><span class="num">${r.pct}%</span> · <span class="num">${fmt(col)}</span> ر.ع.</span></div></foreignObject>
+    </g>`;
+  }).join('');
+  const grid = [0, 50, 100].map((p) => `<line class="gl" x1="${P.l}" x2="${W - P.r}" y1="${y(p)}" y2="${y(p)}"/><text class="yl" x="${W - P.r + 6}" y="${y(p) + 4}" text-anchor="start">${p}%</text>`).join('');
+  return `<figure class="trend"><div class="svgwrap"><svg viewBox="0 0 ${W} ${H}" role="group" aria-label="نسبة التحصيل الشهرية لآخر 12 شهرًا">${grid}<line class="thr" x1="${P.l}" x2="${W - P.r}" y1="${y(alertAt)}" y2="${y(alertAt)}"/>${bars}</svg></div>
+    <figcaption><span class="lg"><i class="ok"></i>فوق حد التنبيه</span><span class="lg"><i class="low"></i>تحت حد التنبيه (!)</span><span class="lg"><i class="thr"></i>حد التنبيه <span class="num">${alertAt}%</span></span></figcaption>
+    <details><summary>عرض كجدول</summary><table class="mini"><thead><tr><th>الشهر</th><th>النسبة</th><th>المحصّل</th><th>المتوقع</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.m}</td><td class="num">${r.pct}%</td><td class="num">${fmt(Math.round(r.exp * r.pct / 100))}</td><td class="num">${fmt(r.exp)}</td></tr>`).join('')}</tbody></table></details></figure>`;
+}
+function buildingFin() {
+  const ex = curExpenses();
+  return db.buildings.map((b) => {
+    const ts = db.tenants.filter((t) => unitOf(t.unitId)?.buildingId === b.id);
+    const inc = totals(ts).collected, out = ex.filter((e) => e.bid === b.id).reduce((a, e) => a + Number(e.amount), 0);
+    return { b, inc, out, net: inc - out };
+  });
+}
+function financePage() {
+  const t = totals(); const ex = curExpenses(); const out = ex.reduce((a, e) => a + Number(e.amount), 0);
+  const rows = buildingFin(); const maxInc = Math.max(1, ...rows.map((r) => r.inc));
+  const byCat = EXP_CATS.map((c) => [c, ex.filter((e) => e.cat === c).reduce((a, e) => a + Number(e.amount), 0)]).filter(([, v]) => v);
+  return `<div class="tools"><div><h1>المالية</h1><span class="mut">${CUR} · الدخل والمصروفات وصافي الربح لكل مبنى.</span></div><div class="bars"><button class="btn soft" data-exp-add>إضافة مصروف</button><a class="btn" style="text-decoration:none" href="#report">التقرير الشهري</a></div></div>
+    <div class="grid" style="grid-auto-rows:auto;margin-bottom:16px">
+      <section class="tile c hero"><span class="lbl">الدخل المحصّل</span><span class="val"><span class="num">${fmt(t.collected)}</span> ر.ع.</span><span style="font-size:13px;font-weight:600">من <span class="num">${fmt(t.expected)}</span> متوقع</span></section>
+      <section class="tile c t3"><span class="lbl">المصروفات</span><span class="val"><span class="num">${fmt(out)}</span> ر.ع.</span><span style="font-size:13px;font-weight:600">${ex.length} بندًا هذا الشهر</span></section>
+      <section class="tile c t2 s2"><span class="lbl">صافي الربح</span><span class="val"><span class="num">${fmt(t.collected - out)}</span> ر.ع.</span><span style="font-size:13px;font-weight:600">هامش <span class="num">${t.collected ? Math.round(((t.collected - out) / t.collected) * 100) : 0}%</span> · يرتفع بـ <span class="num">${fmt(t.expected - t.collected)}</span> ر.ع. عند تحصيل المتأخرات</span></section>
+    </div>
+    <section class="tile" style="margin-bottom:16px"><div class="head" style="margin:0"><h2>نسبة التحصيل · آخر 12 شهرًا</h2><a href="#prefs">تغيير حد التنبيه</a></div>${trendChart()}</section>
+    <div class="cols2">
+      <section class="tile"><h2>الربح حسب المبنى</h2><div class="tbl"><table><thead><tr><th>المبنى</th><th>الدخل</th><th>المصروفات</th><th>الصافي</th></tr></thead><tbody>${rows.map((r) => `<tr><td data-label="المبنى"><span class="v"><b>${esc(r.b.name)}</b><span class="hbar" aria-hidden="true"><i style="width:${Math.round((r.inc / maxInc) * 100)}%"></i><em style="width:${Math.round((r.out / maxInc) * 100)}%"></em></span></span></td><td data-label="الدخل"><span class="v num">${fmt(r.inc)}</span></td><td data-label="المصروفات"><span class="v num">${fmt(r.out)}</span></td><td data-label="الصافي"><span class="v"><b class="num">${fmt(r.net)}</b></span></td></tr>`).join('')}</tbody></table></div>
+        <div class="lgrow"><span class="lg"><i class="ok"></i>الدخل</span><span class="lg"><i class="out"></i>المصروفات</span></div></section>
+      <section class="tile"><h2>المصروفات حسب النوع</h2>${byCat.map(([c, v]) => `<div class="catrow"><span>${esc(c)}</span><span class="cbar" aria-hidden="true"><i style="width:${Math.round((v / Math.max(...byCat.map((x) => x[1]))) * 100)}%"></i></span><b class="num">${fmt(v)}</b></div>`).join('') || '<p class="mut">لا توجد مصروفات هذا الشهر.</p>'}</section>
+    </div>
+    <section class="tile" style="margin-top:16px"><div class="head" style="margin:0"><h2>مصروفات ${CUR}</h2><button class="btn soft small" data-exp-add>إضافة</button></div>
+      <div class="tbl"><table><thead><tr><th>التاريخ</th><th>المبنى</th><th>النوع</th><th>البيان</th><th>المبلغ</th><th></th></tr></thead><tbody>${ex.slice().sort((a, b) => b.date.localeCompare(a.date)).map((e) => `<tr><td data-label="التاريخ"><span class="v">${arDate(e.date)}</span></td><td data-label="المبنى"><span class="v">${esc((bOf(e.bid) || {}).name || '—')}</span></td><td data-label="النوع"><span class="v"><span class="chip">${esc(e.cat)}</span></span></td><td data-label="البيان"><span class="v">${esc(e.note)}</span></td><td data-label="المبلغ"><span class="v"><span class="num">${fmt(e.amount)}</span> ر.ع.</span></td><td class="rowacts"><button class="btn danger small" data-exp-del="${e.id}">حذف</button></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+function addExpense(pre = {}) {
+  openForm('إضافة مصروف', [
+    { key: 'bid', label: 'المبنى', type: 'pick', value: pre.bid || db.buildings[0]?.id, options: db.buildings.map((b) => ({ value: b.id, label: b.name })) },
+    { key: 'cat', label: 'النوع', type: 'pick', value: pre.cat || 'صيانة', options: EXP_CATS.map((x) => ({ value: x, label: x })) },
+    { key: 'amount', label: 'المبلغ (ر.ع.)', type: 'number', value: pre.amount || '', required: true },
+    { key: 'note', label: 'البيان', value: pre.note || '', placeholder: 'مثال: تعبئة غاز مكيف' }
+  ], (v) => { db.expenses.push({ id: uid('e'), bid: v.bid, cat: v.cat, amount: Number(v.amount), date: iso(new Date()), note: v.note.trim() || v.cat }); toast('تمت إضافة المصروف'); });
+}
+window.EXTRA_PAGES.finance = financePage;
+
+/* ================= Monthly report (printable) ================= */
+function reportPage() {
+  const t = totals(); const ex = curExpenses(); const out = ex.reduce((a, e) => a + Number(e.amount), 0);
+  const rows = buildingFin(); const jobs = db.jobs; const vac = db.units.filter((u) => !u.tenantId);
+  const text = `تقرير ${CUR} · سكن\nالتحصيل: ${t.pct}% (${fmt(t.collected)} من ${fmt(t.expected)} ر.ع.)\nالمصروفات: ${fmt(out)} ر.ع.\nصافي الربح: ${fmt(t.collected - out)} ر.ع.\nلم يدفع: ${t.unpaid.length} · شاغرة: ${vac.length}`;
+  return `<div class="tools noprint"><a class="back" href="#finance"><span class="ico" aria-hidden="true">${ICON.back}</span>المالية</a><div class="bars"><a class="btn soft" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">مشاركة الملخص عبر واتساب</a><button class="btn" data-print>طباعة / حفظ PDF</button></div></div>
+  <article class="doc report">
+    <header><span class="rlogo"><svg class="mark" width="30" height="30" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg>سكن</span><span>أُعد في ${arDate(iso(new Date()))}</span></header>
+    <h2>التقرير الشهري · ${CUR}</h2><p class="mut" style="margin-top:-6px">سالم العبري · ${db.buildings.length} مبانٍ · ${db.units.length} وحدة</p>
+    <div class="kpis"><div><span>نسبة التحصيل</span><b class="num">${t.pct}%</b></div><div><span>الدخل المحصّل</span><b><span class="num">${fmt(t.collected)}</span> ر.ع.</b></div><div><span>المصروفات</span><b><span class="num">${fmt(out)}</span> ر.ع.</b></div><div><span>صافي الربح</span><b><span class="num">${fmt(t.collected - out)}</span> ر.ع.</b></div></div>
+    <h3>حسب المبنى</h3><table class="mini"><thead><tr><th>المبنى</th><th>الإشغال</th><th>الدخل</th><th>المصروفات</th><th>الصافي</th></tr></thead><tbody>${rows.map((r) => { const us = db.units.filter((u) => u.buildingId === r.b.id); return `<tr><td>${esc(r.b.name)}</td><td class="num">${us.filter((u) => u.tenantId).length}/${us.length}</td><td class="num">${fmt(r.inc)}</td><td class="num">${fmt(r.out)}</td><td class="num"><b>${fmt(r.net)}</b></td></tr>`; }).join('')}</tbody></table>
+    <h3>لم يدفع بعد (${t.unpaid.length})</h3><table class="mini"><tbody>${t.unpaid.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(place(x.unitId))}</td><td class="num">${fmt(x.rent)} ر.ع.</td><td>${esc(x.note)}</td></tr>`).join('') || '<tr><td>الكل دفع</td></tr>'}</tbody></table>
+    <h3>العقود</h3><p>${expiring().length} عقود تنتهي خلال 60 يومًا · ${awaiting().length} بانتظار التوقيع.</p>
+    <h3>الصيانة</h3><p>${jobs.filter((j) => j.status === 'new').length} جديدة · ${jobs.filter((j) => j.status === 'progress').length} قيد التنفيذ · ${jobs.filter((j) => j.status === 'done').length} تم إصلاحها.</p>
+    <h3>الوحدات الشاغرة (${vac.length})</h3><p>${vac.map((u) => esc(place(u.id))).join('، ') || 'لا توجد'}</p>
+    <footer>تقرير تجريبي من سكن · الأرقام أمثلة.</footer>
+  </article>`;
+}
+window.EXTRA_PAGES.report = reportPage;
+
+/* ================= Technicians ================= */
+function assignTech(jid) {
+  const j = db.jobs.find((x) => x.id === jid); if (!j) return;
+  const guess = { 'تكييف': 'k1', 'سباكة': 'k2', 'كهرباء': 'k3', 'أبواب وأقفال': 'k5' }[j.cat] || (/مكيف|تبريد/.test(j.title) ? 'k1' : /مصعد/.test(j.title) ? 'k4' : /ماء|تسرب|تسرّب|مغسلة/.test(j.title) ? 'k2' : /إضاءة|كهرب/.test(j.title) ? 'k3' : 'k1');
+  const days = nextDays(3);
+  sheetSave = (v) => {
+    const k = db.techs.find((x) => x.id === v.tech); const d = days.find((x) => dayKey(x) === v.day) || days[0];
+    j.tech = k.id; j.visit = `${dayLbl(d)} · ${v.time}`; j.status = 'progress'; j.from = `${k.name} · ${dayLbl(d)} ${v.time}`;
+    if (typeof notify === 'function' && j.unitId) { const t = db.tenants.find((x) => x.unitId === j.unitId); if (t) notify(t.id, `سيزورك ${k.name} (${k.trade}) ${dayLbl(d)} الساعة ${v.time} لطلب: ${j.title}`, '#t-requests'); }
+    toast(`أُرسل الطلب إلى ${k.name} وأُبلغ المستأجر بالموعد`);
+  };
+  const msg = (k) => `مرحبًا ${k.name}، لدينا طلب صيانة (${j.title}) في ${place(j.unitId)}، مسقط. هل يناسبك الموعد المحدد؟ — سالم، عبر سكن`;
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>إسناد لفني</h2><span class="mut" style="font-size:13px">${esc(j.title)} · ${esc(place(j.unitId))}</span>
+    <fieldset class="prio"><legend>الفني</legend><div class="techs">${db.techs.map((k) => `<label><input type="radio" name="tech" value="${k.id}" ${k.id === guess ? 'checked' : ''}><span><b>${esc(k.name)}</b><small>${esc(k.trade)} · ★ <span class="num">${k.rating}</span> · <span class="num">${k.jobs}</span> طلبًا</small></span></label>`).join('')}</div></fieldset>
+    <div class="row2"><fieldset class="prio"><legend>اليوم</legend><div class="chipsel days">${days.map((d, i) => `<label><input type="radio" name="day" value="${dayKey(d)}" ${i === 0 ? 'checked' : ''}><span><small>${WD[d.getDay()]}</small><b class="num">${d.getDate()}</b></span></label>`).join('')}</div></fieldset>
+    <fieldset class="prio"><legend>الوقت</legend><div class="chipsel times">${['9–11 ص', '12–2 م', '4–6 م'].map((x, i) => `<label><input type="radio" name="time" value="${x}" ${i === 2 ? 'checked' : ''}><span>${x}</span></label>`).join('')}</div></fieldset></div>
+    <div class="wa"><span class="mut" style="font-size:12px">الرسالة التي تصل للفني على واتساب</span><div class="bubble" id="waMsg">${esc(msg(db.techs.find((k) => k.id === guess)))}</div></div>
+    <div class="acts"><button class="btn" type="submit">إرسال للفني</button><a class="btn soft" id="waOpen" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg(db.techs.find((k) => k.id === guess)))}">فتح في واتساب</a><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+  $('#sheetForm').addEventListener('change', (e) => { if (e.target.name !== 'tech') return; const m = msg(db.techs.find((k) => k.id === e.target.value)); $('#waMsg').textContent = m; $('#waOpen').href = 'https://wa.me/?text=' + encodeURIComponent(m); });
+}
+function finishJob(j) {
+  const u = unitOf(j.unitId);
+  openForm('تم الإصلاح · ' + j.title, [
+    { key: 'cost', label: 'تكلفة الإصلاح (ر.ع.) · تُضاف تلقائيًا للمصروفات', type: 'number', value: '' },
+    { key: 'note', label: 'ملاحظة', value: j.tech ? 'نفّذه ' + (db.techs.find((k) => k.id === j.tech) || {}).name : '' }
+  ], (v) => {
+    j.status = 'done'; const c = Number(v.cost) || 0;
+    if (c) { j.from = `التكلفة ${c} ر.ع.`; db.expenses.push({ id: uid('e'), bid: u ? u.buildingId : db.buildings[0].id, cat: 'صيانة', amount: c, date: iso(new Date()), note: `${j.title} · ${u ? u.label : ''}` }); }
+    if (typeof notify === 'function') { const t = db.tenants.find((x) => x.unitId === j.unitId); if (t) notify(t.id, `تم إصلاح: ${j.title}. كيف كانت الخدمة؟`, '#t-requests'); }
+    toast(c ? `تم الإغلاق وأُضيف ${c} ر.ع. إلى المصروفات` : 'تم إغلاق الطلب');
+  }, 'إغلاق الطلب');
+}
+
+/* ================= Overview additions ================= */
+function ownerExtras() {
+  const exp = expiring(), aw = awaiting(), up = upcomingViewings(), inq = mkt.listings.filter((l) => l.mine).reduce((a, l) => a + l.inquiries.filter((x) => !x.seen).length, 0);
+  const ex = curExpenses().reduce((a, e) => a + Number(e.amount), 0), t = totals();
+  const item = (href, n, title, sub, hot) => `<a class="todo${hot ? ' hot' : ''}" href="${href}"><b class="num">${n}</b><span><b>${title}</b><small>${sub}</small></span></a>`;
+  return `<div class="grid" style="grid-auto-rows:auto;margin-top:16px">
+    <section class="tile s2"><div class="head" style="margin:0"><h2>يحتاج انتباهك</h2></div><div class="todos">
+      ${item('#contracts', exp.length, 'عقود تنتهي خلال 60 يومًا', exp[0] ? `أقربها ${esc(tOf(exp[0].tenantId).name)} · بعد ${daysTo(exp[0].end)} يومًا` : 'لا شيء', exp.length)}
+      ${item('#contracts', aw.length, 'عقود بانتظار التوقيع', aw.length ? 'أرسل تذكيرًا للمستأجر' : 'كل العقود موقّعة', false)}
+      ${item('#market', up.length, 'معاينات قادمة', up[0] ? `${esc(up[0].x.name)} · ${esc(up[0].x.slot.day)} ${esc(up[0].x.slot.time)}` : 'لا توجد', false)}
+      ${item('#market', inq, 'طلبات معاينة جديدة', 'من سوق سكن', inq)}
+    </div></section>
+    <a class="tile s2" href="#finance" style="text-decoration:none;color:inherit"><div class="head" style="margin:0"><h2>صافي الربح · ${CUR}</h2><span class="mut" style="font-size:13px">المالية ←</span></div>
+      <span class="val"><span class="num">${fmt(t.collected - ex)}</span> ر.ع.</span><span class="mut" style="font-size:13px">دخل <span class="num">${fmt(t.collected)}</span> − مصروفات <span class="num">${fmt(ex)}</span></span>
+      <div class="spark" aria-hidden="true">${[...db.history.slice(-11).map((h) => h.pct), t.pct].map((p) => `<i class="${p < alertAt ? 'low' : ''}" style="height:${Math.max(8, p - 60) * 2.2}%"></i>`).join('')}</div></a>
+  </div>`;
+}
+
+/* ================= Click handlers (owner) ================= */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.move) { const j = db.jobs.find((x) => x.id === d.move); if (j && j.status === 'progress') { e.stopImmediatePropagation(); finishJob(j); } }
+}, true);
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.cfilter) { cFilter = d.cfilter; render(); }
+  else if (d.cView) viewContract(d.cView, document.body.classList.contains('tenant'));
+  else if (d.cRenew) renewForm(d.cRenew);
+  else if (d.cSign) { closeSheet(); signContract(d.cSign); }
+  else if ('sigClear' in d) { const cv = $('#sigpad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); cv._drawn = false; }
+  else if (d.cNudge) { const c = db.contracts.find((x) => x.id === d.cNudge); const t = tOf(c.tenantId); if (typeof notify === 'function') notify(t.id, 'تذكير: عقد إيجارك بانتظار توقيعك', '#t-contract'); toast('تم إرسال تذكير بالتوقيع إلى ' + t.name); }
+  else if ('cNew' in d) { const free = db.tenants.filter((t) => !contractOf(t.id)); if (free.length) { onTenantAdded(free[0]); toast('أُنشئ عقد لـ ' + free[0].name); render(); } else { addTenant(); } }
+  else if ('printDoc' in d) { document.body.classList.add('printdoc'); window.print(); setTimeout(() => document.body.classList.remove('printdoc'), 500); }
+  else if ('expAdd' in d) addExpense();
+  else if (d.expDel) { db.expenses = db.expenses.filter((x) => x.id !== d.expDel); persist(); toast('تم حذف المصروف'); render(); }
+  else if (d.tech) assignTech(d.tech);
+});
+
 render();

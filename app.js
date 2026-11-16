@@ -266,7 +266,7 @@ function overview() {
       <span style="font-size:13px;font-weight:600">${vac.length} شاغرة:</span>
       <div class="chips">${vac.slice(0, 8).map((u) => `<a class="chip" href="#building-${u.buildingId}" style="color:inherit;text-decoration:none">${esc(place(u.id))}</a>`).join('')}${vac.length > 8 ? `<span class="chip">+${vac.length - 8}</span>` : ''}${vac.length ? '' : '<span class="chip">لا توجد</span>'}</div></section>
     <section class="tile t4"><span style="opacity:.8">آخر طلب</span>${newest ? `<b>${esc(newest.title)}</b><span style="opacity:.8;font-size:13px">${esc(place(newest.unitId))}</span><a href="#maintenance" style="color:inherit;font-weight:600">فتح الصيانة</a>` : '<b>لا توجد طلبات جديدة</b>'}</section>
-  </div>`;
+  </div>${typeof ownerExtras === 'function' ? ownerExtras() : ''}`;
 }
 
 function rent() {
@@ -347,7 +347,7 @@ function maintenance() {
   const col = (s, title) => {
     const list = db.jobs.filter((j) => j.status === s);
     return `<section class="tile"><div class="head" style="margin:0"><h2>${title}</h2><span class="pill ${s === 'done' ? 'ok' : s === 'new' ? 'new' : 'due'}">${list.length}</span></div>
-      ${list.map((j) => `<article class="job">${j.photo ? `<img class="thumb" style="width:100%;height:150px" src="${esc(j.photo)}" alt="صورة من المستأجر">` : ''}<b>${esc(j.title)}${j.urgent ? ' <span class="pill late">عاجل</span>' : ''}</b>${j.desc ? `<span style="font-size:14px">${esc(j.desc)}</span>` : ''}<span class="mut" style="font-size:13px">${esc(place(j.unitId))}</span><span class="mut" style="font-size:13px">${esc(j.from)}</span>${NEXT[s] ? `<button class="btn" style="align-self:flex-start" data-move="${j.id}">${NEXT_LABEL[s]}</button>` : ''}</article>`).join('') || '<p class="mut">لا شيء هنا.</p>'}</section>`;
+      ${list.map((j) => `<article class="job">${j.photo ? `<img class="thumb" style="width:100%;height:150px" src="${esc(j.photo)}" alt="صورة من المستأجر">` : ''}<b>${esc(j.title)}${j.urgent ? ' <span class="pill late">عاجل</span>' : ''}</b>${j.desc ? `<span style="font-size:14px">${esc(j.desc)}</span>` : ''}<span class="mut" style="font-size:13px">${esc(place(j.unitId))}</span><span class="mut" style="font-size:13px">${esc(j.from)}</span>${j.tech && db.techs ? `<span class="techline">${svgI('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-2.4z"/>', 15)} ${esc((db.techs.find((k) => k.id === j.tech) || {}).name || '')}${j.visit ? ' · ' + esc(j.visit) : ''}</span>` : ''}<div class="bars">${NEXT[s] ? `<button class="btn" data-move="${j.id}">${NEXT_LABEL[s]}</button>` : ''}${s !== 'done' && !j.tech ? `<button class="btn soft" data-tech="${j.id}">إسناد لفني</button>` : ''}</div></article>`).join('') || '<p class="mut">لا شيء هنا.</p>'}</section>`;
   };
   return `<div class="tools"><h1>طلبات المستأجرين</h1></div><div class="cols">${col('new', 'جديد')}${col('progress', 'قيد التنفيذ')}${col('done', 'تم الإصلاح')}</div>`;
 }
@@ -1117,7 +1117,7 @@ document.addEventListener('click', (e) => {
     });
     return;
   }
-  else if ('reset' in d) { confirmBox('إعادة كل البيانات التجريبية؟', () => { db = seed(); mkt = seedMarket(); persistM(); toast('تمت إعادة البيانات'); }, 'إعادة'); return; }
+  else if ('reset' in d) { confirmBox('إعادة كل البيانات التجريبية؟', () => { db = seed(); if (typeof seedOwnerExtras === 'function') seedOwnerExtras(); mkt = seedMarket(); persistM(); toast('تمت إعادة البيانات'); }, 'إعادة'); return; }
   else return;
   render();
 });
