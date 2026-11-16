@@ -191,20 +191,23 @@ function moveIndicator() {
 }
 
 const vacantOptions = () => db.units.filter((u) => !u.tenantId).map((u) => ({ value: u.id, label: place(u.id) }));
-function addTenant(unitId) {
+function addTenant(unitId, pre = {}) {
   const opts = vacantOptions();
   if (!opts.length) { toast('لا توجد وحدات شاغرة. أضف وحدة من صفحة المباني.'); return; }
   const u = unitOf(unitId || opts[0].value);
-  openForm('إضافة مستأجر', [
-    { key: 'name', label: 'الاسم', required: true },
-    { key: 'phone', label: 'رقم الهاتف', type: 'tel', placeholder: '+968' },
+  openForm(pre.title || 'إضافة مستأجر', [
+    { key: 'name', label: 'الاسم', required: true, value: pre.name || '' },
+    { key: 'phone', label: 'رقم الهاتف', type: 'tel', placeholder: '+968', value: pre.phone || '' },
     { key: 'unitId', label: 'الوحدة', type: 'select', options: opts, value: u.id },
-    { key: 'rent', label: 'الإيجار الشهري (ر.ع.)', type: 'number', value: u.rent, required: true },
+    { key: 'rent', label: 'الإيجار الشهري (ر.ع.)', type: 'number', value: pre.rent || u.rent, required: true },
     { key: 'due', label: 'تاريخ الاستحقاق', value: '1 ديسمبر' }
   ], (v) => {
     const t = { id: uid('t'), unitId: v.unitId, name: v.name.trim(), phone: v.phone.trim(), rent: Number(v.rent), due: v.due, status: 'due', note: 'مستحق', receipts: [] };
     db.tenants.push(t); unitOf(v.unitId).tenantId = t.id; toast('تمت إضافة ' + t.name);
-    mkt.listings.forEach((l) => { if (l.unitId === v.unitId && l.status !== 'rented') l.status = 'rented'; }); persistM();
+    mkt.listings.forEach((l) => { if (l.unitId === v.unitId && l.status !== 'rented') l.status = 'rented'; });
+    if (pre.onDone) pre.onDone(t);
+    persistM();
+    if (typeof onTenantAdded === 'function') onTenantAdded(t);
   });
 }
 function editTenant(id) {
@@ -656,7 +659,7 @@ try { mkt = JSON.parse(localStorage.getItem(MSTORE)) || seedMarket(); } catch (e
 })();
 function persistM() { try { localStorage.setItem(MSTORE, JSON.stringify(mkt)); return true; } catch (e) { return false; } }
 const lOf = (id) => mkt.listings.find((l) => l.id === id);
-const mf = { tab: 'browse', q: '', area: '', type: '', max: '', beds: '', furn: '', sort: 'new' };
+const mf = { tab: 'browse', q: '', area: '', type: '', max: '', beds: '', furn: '', sort: 'new', view: 'list' };
 const MI = {
   bed: svgI('<path d="M3 18V8M3 14h18v4M21 18v-4a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="11.5" r="1.5"/>', 16),
   bath: svgI('<path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M6 12V6a2 2 0 0 1 4 0"/><path d="M7 19l-1 2M17 19l1 2"/>', 16),
@@ -668,25 +671,97 @@ const specs = (l) => `<span class="specs">${l.type === 'محل' || l.type === '�
 const LSTATUS = { active: ['ok', 'منشور'], paused: ['due', 'متوقف مؤقتًا'], rented: ['new', 'تم التأجير'] };
 const waLink = (p) => { let d = String(p || '').replace(/\D/g, ''); if (!d) return ''; if (d.length === 8) d = '968' + d; return 'https://wa.me/' + d; };
 
+/* ---------- Marketplace extras: badges, owner ratings, fair price, viewing slots, saved searches ---------- */
+const WD = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const TIMES = ['09:00', '10:00', '11:00', '16:00', '17:00', '18:30', '20:00'];
+const DEF_TIMES = ['10:00', '16:00', '18:30'];
+const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dayLbl = (d) => `${WD[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+function nextDays(n = 7) { const out = []; const d = new Date(); d.setHours(12); while (out.length < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 5) out.push(new Date(d)); } return out; }
+const OWNERS = {
+  'سالم العبري': { r: 4.8, n: 23, since: 2019, rev: [['عائشة', 5, 'رد سريع على طلبات الصيانة والشقة نظيفة.'], ['جيمس', 5, 'Very fair landlord, contract was clear.']] },
+  'عقارات النخبة (مثال)': { r: 4.3, n: 41, since: 2016, rev: [['خالد', 4, 'تعامل محترف، لكن التأمين أخذ وقت ليُرد.']] },
+  'محمد الحارثي (مثال)': { r: 4.6, n: 9, since: 2021, rev: [['منى', 5, 'المالك متعاون جدًا.']] },
+  'ليلى البوسعيدية (مثال)': { r: 4.9, n: 14, since: 2020, rev: [['سارة', 5, 'كل شي كان كما في الصور.']] },
+  'شركة الواحة العقارية (مثال)': { r: 4.5, n: 57, since: 2012, rev: [['أحمد', 4, 'فلل ممتازة والصيانة منتظمة.']] },
+  'خالد الريامي (مثال)': { r: 4.1, n: 6, since: 2022, rev: [['راجيش', 4, 'Good location, owner replies on WhatsApp.']] }
+};
+const stars = (r) => `<span class="stars" aria-label="${r} من 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${r >= i - 0.25 ? 'on' : r >= i - 0.75 ? 'half' : ''}">★</i>`).join('')}</span>`;
+const AREA_F = { 'القرم': 1.2, 'الموج': 1.3, 'مدينة السلطان قابوس': 1.35, 'الخوير': 1.05, 'بوشر': 1.05, 'العذيبة': 1, 'الغبرة': 0.95, 'الخوض': 0.85, 'المعبيلة': 0.75, 'السيب': 0.8, 'الحيل': 0.85, 'مطرح': 0.85, 'روي': 0.9, 'العامرات': 0.75, 'الأنصب': 0.9 };
+function fair(l) {
+  const b = Number(l.beds) || 0, s = Number(l.size) || 0;
+  const base = { 'استوديو': 175, 'غرفة': 115, 'لوفت': 340, 'شقة': 140 + 90 * Math.max(1, b), 'فيلا': 260 + 85 * Math.max(2, b), 'فيلا توين': 230 + 80 * Math.max(2, b), 'تاون هاوس': 220 + 75 * Math.max(2, b), 'محل': 5.6 * (s || 80), 'مكتب': 5.2 * (s || 70) }[l.type] || 300;
+  const mid = base * (AREA_F[l.area] || 1) * (l.furnished === 'yes' ? 1.12 : 1);
+  const r10 = (x) => Math.round(x / 10) * 10;
+  return { lo: r10(mid * 0.9), hi: r10(mid * 1.1), mid: r10(mid) };
+}
+function fairNote(l) {
+  if (!l.rent || !l.area || !l.type) return '';
+  const f = fair(l), r = Number(l.rent);
+  const [cls, txt] = r < f.lo ? ['good', 'أقل من سعر السوق'] : r > f.hi ? ['high', 'أعلى من سعر السوق'] : ['ok', 'ضمن سعر السوق'];
+  return `<div class="fair ${cls}"><b>${txt}</b><span>وحدات مشابهة (${esc(l.type)} في ${esc(l.area)}) تؤجَّر عادة بين <span class="num">${fmt(f.lo)}</span> و<span class="num">${fmt(f.hi)}</span> ر.ع.</span><span class="fbar" aria-hidden="true"><i style="inset-inline-start:${Math.max(2, Math.min(98, ((r - f.lo * 0.8) / (f.hi * 1.2 - f.lo * 0.8)) * 100))}%"></i></span><small>تقدير سكن من أسعار السوق · تجريبي</small></div>`;
+}
+const vBadge = (l) => (l.verified ? `<span class="vbadge" title="موثّق من سكن">${svgI('<path d="M12 2l2.4 2.1 3.2-.3.7 3.1 2.8 1.6-1.3 2.9 1.3 2.9-2.8 1.6-.7 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.7-3.1-2.8-1.6 1.3-2.9-1.3-2.9 2.8-1.6.7-3.1 3.2.3z"/><path d="M8.5 12l2.3 2.3 4.7-4.6"/>', 16)}موثّق</span>` : '');
+// one-time additions for older saved data and the sample ads
+(() => {
+  const X = {
+    'شقة غرفتين بإطلالة على البحر': { verified: true }, 'لوفت حديث قرب الموج مارينا': { verified: true }, 'فيلا 4 غرف مع حديقة': { verified: true },
+    'فيلا دوبلكس فاخرة': { verified: true, featured: true, featUntil: '30 نوفمبر' }, 'فيلا توين 4 غرف قرب الشاطئ': { verified: true, featured: true, featUntil: '25 نوفمبر' }, 'شقة غرفتين قرب المطار': { verified: true }
+  };
+  mkt.listings.forEach((l) => {
+    if (l.times) return;
+    Object.assign(l, { verified: false, featured: false, times: DEF_TIMES.slice() }, X[l.title] || {});
+  });
+  if (!mkt.searches) {
+    mkt.searches = [{ id: 's1', label: 'فيلا توين في الموج', f: { q: '', area: 'الموج', type: 'فيلا توين', max: '', beds: '', furn: '' }, seen: [] }];
+    const l1 = mkt.listings.find((l) => l.title === 'شقة غرفتين بإطلالة على البحر');
+    const days = nextDays(3);
+    if (l1 && l1.inquiries[0]) l1.inquiries[0].slot = { key: dayKey(days[1]) + ' 18:30', day: dayLbl(days[1]), time: '18:30' };
+    if (l1 && l1.inquiries[1]) l1.inquiries[1].slot = { key: dayKey(days[0]) + ' 10:00', day: dayLbl(days[0]), time: '10:00' };
+  }
+  persistM();
+})();
+const FKEYS = ['q', 'area', 'type', 'max', 'beds', 'furn'];
+const hasFilters = (f) => FKEYS.some((k) => f[k]);
+function applyFilters(list, f) {
+  const q = (f.q || '').trim();
+  if (q) list = list.filter((l) => matchQ(l, q));
+  if (f.area) list = list.filter((l) => l.area === f.area);
+  if (f.type) list = list.filter((l) => l.type === f.type);
+  if (f.beds) list = list.filter((l) => Number(l.beds) >= Number(f.beds));
+  if (f.max) list = list.filter((l) => Number(l.rent) <= Number(f.max));
+  if (f.furn) list = list.filter((l) => l.furnished === f.furn);
+  return list;
+}
+const searchLabel = (f) => [f.type, f.area && 'في ' + f.area, f.q && `«${f.q}»`, f.beds && f.beds + '+ غرف', f.max && 'حتى ' + f.max + ' ر.ع.', f.furn && (f.furn === 'yes' ? 'مفروشة' : 'غير مفروشة')].filter(Boolean).join(' · ') || 'كل الإعلانات';
+const searchHits = (s) => applyFilters(mkt.listings.filter((l) => l.status === 'active'), s.f);
+const searchNew = (s) => searchHits(s).filter((l) => !s.seen.includes(l.id)).length;
+function upcomingViewings() {
+  const now = dayKey(new Date());
+  const out = [];
+  mkt.listings.filter((l) => l.mine && l.status !== 'rented').forEach((l) => l.inquiries.forEach((x) => { if (x.slot && x.slot.key >= now && x.status !== 'declined') out.push({ l, x }); }));
+  return out.sort((a, b) => a.x.slot.key.localeCompare(b.x.slot.key));
+}
+
 function lcard(l, ten) {
   const fav = mkt.saved.includes(l.id);
-  return `<article class="lcard"><button type="button" class="lopen" data-mk-open="${l.id}"><span class="lph"><img src="${esc(imgsOf(l)[0] || '')}" alt="" loading="lazy"><span class="lprice"><span class="num">${fmt(l.rent)}</span> ر.ع. <small>/ شهر</small></span>${l.mine && !ten ? '<span class="ltag">إعلانك</span>' : ''}</span>
-    <span class="lbd"><b>${esc(l.title)}</b><span class="mut" style="font-size:13px;display:inline-flex;gap:4px;align-items:center">${MI.pin}${esc(l.area)} · ${esc(l.type)}${l.furnished === 'yes' ? ' · مفروشة' : ''}</span>${specs(l)}</span></button>
+  const tags = [l.featured ? '<span class="ltag feat">★ مميز</span>' : '', l.mine && !ten ? '<span class="ltag">إعلانك</span>' : ''].join('');
+  return `<article class="lcard${l.featured ? ' isfeat' : ''}"><button type="button" class="lopen" data-mk-open="${l.id}"><span class="lph"><img src="${esc(imgsOf(l)[0] || '')}" alt="" loading="lazy"><span class="lprice"><span class="num">${fmt(l.rent)}</span> ر.ع. <small>/ شهر</small></span>${tags ? `<span class="ltags">${tags}</span>` : ''}</span>
+    <span class="lbd"><b>${esc(l.title)}</b><span class="mut" style="font-size:13px;display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap">${MI.pin}${esc(l.area)} · ${esc(l.type)}${l.furnished === 'yes' ? ' · مفروشة' : ''}${vBadge(l)}</span>${specs(l)}</span></button>
     ${ten || !l.mine ? `<button type="button" class="lfav ${fav ? 'on' : ''}" data-mk-fav="${l.id}" aria-pressed="${fav}" aria-label="${fav ? 'إزالة من المحفوظة' : 'حفظ الإعلان'}">${MI.heart}</button>` : ''}</article>`;
 }
 function mResults(ten) {
   let list = mkt.listings.filter((l) => l.status === 'active' && (mf.tab !== 'saved' || mkt.saved.includes(l.id)));
-  const q = mf.q.trim().toLowerCase();
-  if (q) list = list.filter((l) => matchQ(l, q));
-  if (mf.area) list = list.filter((l) => l.area === mf.area);
-  if (mf.type) list = list.filter((l) => l.type === mf.type);
-  if (mf.beds) list = list.filter((l) => Number(l.beds) >= Number(mf.beds));
-  if (mf.max) list = list.filter((l) => Number(l.rent) <= Number(mf.max));
-  if (mf.furn) list = list.filter((l) => l.furnished === mf.furn);
-  const by = { new: (a, b) => (b.ts || 0) - (a.ts || 0) || mkt.listings.indexOf(a) - mkt.listings.indexOf(b), cheap: (a, b) => a.rent - b.rent, dear: (a, b) => b.rent - a.rent, big: (a, b) => (b.size || 0) - (a.size || 0) };
+  if (mf.tab !== 'saved') list = applyFilters(list, mf);
+  const by = { new: (a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || (b.ts || 0) - (a.ts || 0) || mkt.listings.indexOf(a) - mkt.listings.indexOf(b), cheap: (a, b) => a.rent - b.rent, dear: (a, b) => b.rent - a.rent, big: (a, b) => (b.size || 0) - (a.size || 0) };
   list.sort(by[mf.sort] || by.new);
   const empty = mf.tab === 'saved' ? 'لم تحفظ أي إعلان بعد. اضغط على القلب في أي إعلان لحفظه.' : 'لا توجد إعلانات بهذه الشروط. جرّب توسيع البحث.';
-  return [list.length, list.map((l) => lcard(l, ten)).join('') || `<section class="tile empty" style="grid-column:1/-1">${empty}</section>`];
+  return [list.length, list.map((l) => lcard(l, ten)).join('') || `<section class="tile empty" style="grid-column:1/-1">${empty}</section>`, list];
+}
+function savedSearches() {
+  const ss = mkt.searches || [];
+  return `<section class="tile ssearch"><div class="head" style="margin:0"><h2>عمليات البحث المحفوظة</h2><span class="mut" style="font-size:13px">نبلغك عند نزول إعلان جديد يطابقها</span></div>
+    ${ss.map((s) => { const n = searchNew(s), all = searchHits(s).length; return `<div class="srow"><span class="sicn">${svgI('<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>', 18)}</span><span class="grow"><b>${esc(s.label)}</b><span class="mut" style="font-size:13px"><span class="num">${all}</span> إعلان${n ? ` · <span class="pill new">${n} جديد</span>` : ''}</span></span><button class="btn small" data-ss-run="${s.id}">عرض</button><button class="btn soft small" data-ss-del="${s.id}" aria-label="حذف البحث">حذف</button></div>`; }).join('') || '<p class="mut" style="margin:0">لم تحفظ أي بحث. اختر فلاتر في «تصفّح» ثم اضغط «احفظ البحث وأبلغني».</p>'}</section>`;
 }
 function market(ten) {
   if (ten && mf.tab === 'mine') mf.tab = 'browse';
@@ -694,12 +769,15 @@ function market(ten) {
   const active = mkt.listings.filter((l) => l.status === 'active');
   const mine = mkt.listings.filter((l) => l.mine);
   const fresh = mine.reduce((a, l) => a + l.inquiries.filter((x) => !x.seen).length, 0);
-  const tabs = ten ? [['browse', 'تصفّح', active.length], ['saved', 'المحفوظة', mkt.saved.filter((id) => lOf(id)?.status === 'active').length]] : [['browse', 'كل الإعلانات', active.length], ['mine', 'إعلاناتي', mine.length, fresh]];
+  const ssNew = (mkt.searches || []).reduce((a, s) => a + searchNew(s), 0);
+  const tabs = ten ? [['browse', 'تصفّح', active.length], ['saved', 'المحفوظة', mkt.saved.filter((id) => lOf(id)?.status === 'active').length, ssNew, 'جديد']] : [['browse', 'كل الإعلانات', active.length], ['mine', 'إعلاناتي', mine.length, fresh, 'طلب جديد']];
   const head = `<div class="tools"><div><h1>${ten ? 'ابحث عن سكن' : 'سوق سكن'}</h1><span class="mut">${ten ? 'شقق وفلل للإيجار في مسقط، من الملّاك مباشرة.' : 'اعرض وحداتك الشاغرة، واستقبل طلبات المعاينة هنا.'}</span></div>${ten ? '' : `<button class="act main" data-mk-new><span class="ico" aria-hidden="true">${svgI('<path d="M12 5v14M5 12h14"/>')}</span><span><b>أضف إعلان</b><small>صور ووصف وسعر</small></span></button>`}</div>
-    <div class="tabs mtabs" role="tablist">${tabs.map(([k, n, c, f]) => `<button type="button" role="tab" data-mk-tab="${k}" class="${mf.tab === k ? 'on' : ''}" aria-selected="${mf.tab === k}">${n}<span class="num">${c}</span>${f ? ` <span class="pill new" style="margin-inline-start:6px">${f} طلب جديد</span>` : ''}</button>`).join('')}</div>`;
+    <div class="tabs mtabs" role="tablist">${tabs.map(([k, n, c, f, w]) => `<button type="button" role="tab" data-mk-tab="${k}" class="${mf.tab === k ? 'on' : ''}" aria-selected="${mf.tab === k}">${n}<span class="num">${c}</span>${f ? ` <span class="pill new" style="margin-inline-start:6px">${f} ${w}</span>` : ''}</button>`).join('')}</div>`;
   if (mf.tab === 'mine') return head + myListings();
   const opt = (v, label, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(label)}</option>`;
   const [n, cards] = mResults(ten);
+  const isMap = mf.view === 'map';
+  if (mf.tab === 'saved') return head + savedSearches() + `<div class="head"><h2>الإعلانات المحفوظة</h2><span class="mut"><span class="num">${n}</span> إعلان</span></div><div class="lgrid" id="mres">${cards}</div>`;
   return head + `<section class="tile filters">
       <div class="fld q"><label for="mq">بحث</label><div class="sbox"><input id="mq" type="search" data-mf="q" value="${esc(mf.q)}" placeholder="مثال: فيلا توين، twin، إطلالة بحر، القرم" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sugg" aria-autocomplete="list"><div class="sugg" id="sugg" role="listbox" hidden></div></div></div>
       <div class="fld"><span>المنطقة</span>${picker('area', [['', 'كل المناطق'], ...AREAS], mf.area, { mf: 'area' })}</div>
@@ -709,21 +787,28 @@ function market(ten) {
       <label class="fld">الأثاث<select data-mf="furn">${opt('', 'الكل', mf.furn)}${opt('yes', 'مفروشة', mf.furn)}${opt('no', 'غير مفروشة', mf.furn)}</select></label>
       <label class="fld">الترتيب<select data-mf="sort">${opt('new', 'الأحدث', mf.sort)}${opt('cheap', 'الأقل سعرًا', mf.sort)}${opt('dear', 'الأعلى سعرًا', mf.sort)}${opt('big', 'الأكبر مساحة', mf.sort)}</select></label>
     </section>
-    <div class="mcount mut"><span id="mcount"><span class="num">${n}</span> إعلان</span>${mf.type || mf.area || mf.q || mf.max || mf.beds || mf.furn ? ' · <button type="button" class="clearf" data-mk-clear>مسح الفلاتر</button>' : ''}</div>
-    <div class="lgrid" id="mres">${cards}</div>`;
+    <div class="mbar"><div class="mcount mut"><span id="mcount"><span class="num">${n}</span> إعلان</span>${hasFilters(mf) ? ' · <button type="button" class="clearf" data-mk-clear>مسح الفلاتر</button>' : ''}</div>
+      <div class="bars">${ten && mf.tab === 'browse' ? `<button class="btn soft small" data-ss-save ${hasFilters(mf) ? '' : 'disabled title="اختر فلاتر أولًا"'}>${svgI('<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>', 16)} احفظ البحث وأبلغني</button>` : ''}
+      <div class="seg vseg" role="group" aria-label="طريقة العرض"><button type="button" data-mk-view="list" class="${isMap ? '' : 'on'}" aria-pressed="${!isMap}">قائمة</button><button type="button" data-mk-view="map" class="${isMap ? 'on' : ''}" aria-pressed="${isMap}">خريطة</button></div></div></div>
+    ${isMap ? '<div class="mmap" id="mmap" role="region" aria-label="خريطة الإعلانات"></div>' : ''}
+    <div class="lgrid" id="mres" ${isMap ? 'hidden' : ''}>${cards}</div>`;
 }
 function myListings() {
   const mine = mkt.listings.filter((l) => l.mine).sort((a, b) => (a.status === 'rented') - (b.status === 'rented'));
   if (!mine.length) return `<section class="tile empty">لم تنشر أي إعلان بعد. اضغط «أضف إعلان»، أو افتح وحدة شاغرة من صفحة المباني واختر «انشر في السوق».</section>`;
-  return `<div class="mylist">${mine.map((l) => {
+  const up = upcomingViewings();
+  const viewings = `<section class="tile" style="margin-bottom:14px"><div class="head" style="margin:0"><h2>المعاينات القادمة</h2><span class="pill new">${up.length}</span></div>
+    ${up.length ? `<div class="vlist">${up.map(({ l, x }) => `<div class="vrow"><span class="vdate"><b>${esc(x.slot.day.split(' ')[0])}</b><span class="num">${esc(x.slot.day.split(' ').slice(1).join(' '))}</span></span><span class="grow"><b>${esc(x.name)} · <span class="num">${esc(x.slot.time)}</span></b><span class="mut" style="font-size:13px">${esc(l.title)}</span></span>${x.status === 'confirmed' ? '<span class="pill ok">مؤكدة</span>' : `<button class="btn small" data-vw-ok="${l.id}|${x.id}">تأكيد</button>`}</div>`).join('')}</div>` : '<p class="mut" style="margin:0">لا توجد معاينات محجوزة بعد.</p>'}</section>`;
+  return viewings + `<div class="mylist">${mine.map((l) => {
     const [cls, txt] = LSTATUS[l.status];
     const inq = l.inquiries.slice().reverse();
     return `<section class="tile"><div class="mine"><img src="${esc(imgsOf(l)[0] || '')}" alt=""><div class="grow">
-      <div class="tools" style="margin:0"><b style="font-size:17px">${esc(l.title)}</b><span class="pill ${cls}">${txt}</span></div>
+      <div class="tools" style="margin:0"><b style="font-size:17px">${esc(l.title)}</b><span class="bars">${l.featured ? '<span class="pill feat">★ مميز حتى ' + esc(l.featUntil || '') + '</span>' : ''}${l.verified ? '<span class="pill ok">موثّق</span>' : l.verifyPending ? '<span class="pill due">التوثيق قيد المراجعة</span>' : ''}<span class="pill ${cls}">${txt}</span></span></div>
       <span class="mut" style="font-size:13px">${esc(l.area)} · ${esc(l.type)} · <span class="num">${fmt(l.rent)}</span> ر.ع. / شهر${l.unitId && unitOf(l.unitId) ? ' · ' + esc(place(l.unitId)) : ''}</span>
       <span style="font-size:13px;font-weight:600"><span class="num">${l.views}</span> مشاهدة · <span class="num">${l.inquiries.length}</span> طلب معاينة · نُشر ${esc(l.date)}</span>
-      <div class="bars" style="margin-top:6px"><button class="btn small" data-mk-open="${l.id}">عرض</button><button class="btn soft small" data-mk-edit="${l.id}">تعديل</button><button class="btn soft small" data-mk-toggle="${l.id}">${l.status === 'active' ? 'إيقاف مؤقت' : 'إعادة النشر'}</button><button class="btn danger small" data-mk-del="${l.id}">حذف</button></div>
-      ${inq.length ? `<div class="inqs"><span class="mut" style="font-size:12px;font-weight:600">طلبات المعاينة</span>${inq.map((x) => `<div class="inq ${x.seen ? '' : 'new'}"><b>${esc(x.name)}${x.seen ? '' : ' <span class="pill new">جديد</span>'}</b><span>${esc(x.msg)}</span><span class="mut">${esc(x.when)} · ${esc(x.date)}${x.phone ? ` · <span class="num" dir="ltr">${esc(x.phone)}</span>` : ''}</span>${x.phone && waLink(x.phone) ? `<a class="btn small" style="align-self:flex-start;text-decoration:none;margin-top:4px" href="${waLink(x.phone)}" target="_blank" rel="noopener">رد عبر واتساب</a>` : ''}</div>`).join('')}</div>` : ''}
+      <div class="bars" style="margin-top:6px"><button class="btn small" data-mk-open="${l.id}">عرض</button><button class="btn soft small" data-mk-edit="${l.id}">تعديل</button>${l.status === 'active' && !l.featured ? `<button class="btn soft small" data-mk-feat="${l.id}">★ ميّز الإعلان</button>` : ''}${!l.verified && !l.verifyPending ? `<button class="btn soft small" data-mk-verify="${l.id}">اطلب التوثيق</button>` : ''}${l.verifyPending ? `<button class="btn soft small" data-mk-approve="${l.id}" title="في النسخة الحقيقية يعتمده فريق سكن بعد الزيارة">اعتماد التوثيق (تجريبي)</button>` : ''}<button class="btn soft small" data-mk-toggle="${l.id}">${l.status === 'active' ? 'إيقاف مؤقت' : 'إعادة النشر'}</button><button class="btn danger small" data-mk-del="${l.id}">حذف</button></div>
+      ${inq.length ? `<div class="inqs"><span class="mut" style="font-size:12px;font-weight:600">طلبات المعاينة</span>${inq.map((x) => `<div class="inq ${x.seen ? '' : 'new'}"><b>${esc(x.name)}${x.seen ? '' : ' <span class="pill new">جديد</span>'}${x.status === 'accepted' ? ' <span class="pill ok">أصبح مستأجرًا</span>' : ''}</b><span>${esc(x.msg)}</span><span class="mut">${x.slot ? `معاينة: ${esc(x.slot.day)} · <span class="num">${esc(x.slot.time)}</span>` : esc(x.when || '')} · أُرسل ${esc(x.date)}${x.phone ? ` · <span class="num" dir="ltr">${esc(x.phone)}</span>` : ''}</span>
+        <div class="bars" style="margin-top:4px">${x.phone && waLink(x.phone) ? `<a class="btn small" style="text-decoration:none" href="${waLink(x.phone)}" target="_blank" rel="noopener">رد عبر واتساب</a>` : ''}${x.status !== 'accepted' && l.status !== 'rented' ? `<button class="btn soft small" data-mk-accept="${l.id}|${x.id}">قبول كمستأجر</button>` : ''}</div></div>`).join('')}</div>` : ''}
     </div></div></section>`;
   }).join('')}</div>`;
 }
@@ -738,34 +823,47 @@ function openListing(id) {
   const info = (k, v) => `<div class="kv"><span class="mut">${k}</span><b>${v}</b></div>`;
   const fav = mkt.saved.includes(l.id);
   const wa = !own && l.phone && waLink(l.phone);
+  const ow = OWNERS[l.owner] || { r: 0, n: 0 };
   const acts = own
-    ? `<button class="btn" data-mk-edit="${l.id}">تعديل الإعلان</button><button class="btn soft" data-mk-toggle="${l.id}">${l.status === 'active' ? 'إيقاف مؤقت' : 'إعادة النشر'}</button><button class="btn danger" data-mk-del="${l.id}">حذف</button>`
-    : `<button class="btn" data-mk-ask="${l.id}">اطلب معاينة</button>${wa ? `<a class="btn soft" style="text-decoration:none" href="${wa}" target="_blank" rel="noopener">واتساب المعلن</a>` : ''}<button class="btn soft" data-mk-fav="${l.id}">${fav ? 'محفوظ ✓' : 'حفظ'}</button>`;
+    ? `<button class="btn" data-mk-edit="${l.id}">تعديل الإعلان</button>${l.status === 'active' && !l.featured ? `<button class="btn soft" data-mk-feat="${l.id}">★ ميّز الإعلان</button>` : ''}<button class="btn soft" data-mk-toggle="${l.id}">${l.status === 'active' ? 'إيقاف مؤقت' : 'إعادة النشر'}</button><button class="btn danger" data-mk-del="${l.id}">حذف</button>`
+    : `<button class="btn" data-mk-ask="${l.id}">احجز موعد معاينة</button>${wa ? `<a class="btn soft" style="text-decoration:none" href="${wa}" target="_blank" rel="noopener">واتساب المعلن</a>` : ''}<button class="btn soft" data-mk-fav="${l.id}">${fav ? 'محفوظ ✓' : 'حفظ'}</button>`;
   $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="${esc(l.title)}">
     <div class="gal">${imgs.map((s, i) => `<img src="${esc(s)}" alt="صورة ${i + 1} من ${imgs.length}">`).join('')}</div>
     ${imgs.length > 1 ? `<span class="mut galhint">${imgs.length} صور · اسحب لرؤية المزيد</span>` : ''}
-    <div class="tools" style="margin:0;align-items:flex-start"><div><span class="mut" style="font-size:13px">${esc(l.area)} · ${esc(l.type)}</span><h2 style="font-size:21px;line-height:1.6">${esc(l.title)}</h2></div><span class="lpr"><span class="num">${fmt(l.rent)}</span> <small class="mut" style="font-size:13px">ر.ع. / شهر</small></span></div>
+    <div class="tools" style="margin:0;align-items:flex-start"><div><span class="mut" style="font-size:13px;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">${esc(l.area)} · ${esc(l.type)}${vBadge(l)}${l.featured ? '<span class="pill feat">★ مميز</span>' : ''}</span><h2 style="font-size:21px;line-height:1.6">${esc(l.title)}</h2></div><span class="lpr"><span class="num">${fmt(l.rent)}</span> <small class="mut" style="font-size:13px">ر.ع. / شهر</small></span></div>
+    ${fairNote(l)}
     <div class="kvs">${l.type === 'محل' || l.type === 'مكتب' ? '' : info('غرف النوم', Number(l.beds) ? `<span class="num">${l.beds}</span>` : 'استوديو')}${info('الحمّامات', `<span class="num">${l.baths}</span>`)}${info('المساحة', l.size ? `<span class="num">${l.size}</span> م²` : '—')}${info('الأثاث', l.furnished === 'yes' ? 'مفروشة' : 'غير مفروشة')}</div>
     ${l.desc ? `<p style="margin:0;white-space:pre-line">${esc(l.desc)}</p>` : ''}
     ${(l.feats || []).length ? `<div class="feats">${l.feats.map((f) => `<span class="chip">${esc(f)}</span>`).join('')}</div>` : ''}
-    <span class="mut" style="font-size:12px">المعلن: ${esc(l.owner)} · نُشر ${esc(l.date)} · <span class="num">${l.views}</span> مشاهدة</span>
+    <div class="owner"><div class="tools" style="margin:0"><span><b>${esc(l.owner)}</b> ${l.verified ? vBadge(l) : ''}<br><span class="mut" style="font-size:12px">${ow.since ? 'على سكن منذ ' + ow.since + ' · ' : ''}نُشر ${esc(l.date)} · <span class="num">${l.views}</span> مشاهدة</span></span>${ow.n ? `<span class="rating">${stars(ow.r)}<b class="num">${ow.r}</b><small class="mut">(${ow.n} تقييم)</small></span>` : '<span class="mut" style="font-size:12px">لا توجد تقييمات بعد</span>'}</div>
+      ${(ow.rev || []).map(([n, r, t]) => `<div class="review">${stars(r)}<span>«${esc(t)}»</span><small class="mut">${esc(n)} · مستأجر سابق</small></div>`).join('')}</div>
     <div class="bars">${acts}<button class="btn soft" data-close>إغلاق</button></div></div>`;
   $('#sheet').hidden = false;
 }
 function askViewing(id) {
   const l = lOf(id); if (!l) return;
   const t = document.body.classList.contains('tenant') ? me() : null;
+  const days = nextDays(6);
+  const taken = new Set(l.inquiries.map((x) => x.slot && x.slot.key).filter(Boolean));
+  const times = (l.times && l.times.length ? l.times : DEF_TIMES);
   sheetSave = (v) => {
-    l.inquiries.push({ id: uid('q'), name: v.name.trim(), phone: v.phone.trim(), msg: v.msg.trim() || 'أرغب في معاينة الوحدة.', when: v.when, date: today(), seen: false });
-    persistM(); toast('تم إرسال طلبك إلى ' + l.owner);
+    const d = days.find((x) => dayKey(x) === v.day) || days[0];
+    const slot = { key: dayKey(d) + ' ' + v.time, day: dayLbl(d), time: v.time };
+    l.inquiries.push({ id: uid('q'), name: v.name.trim(), phone: v.phone.trim(), msg: v.msg.trim() || 'أرغب في معاينة الوحدة.', when: slot.day + ' ' + slot.time, slot, date: today(), seen: false, by: t ? t.id : '' });
+    persistM(); toast(`تم حجز المعاينة: ${slot.day} الساعة ${slot.time}`);
+    if (typeof notify === 'function') notify('owner', `طلب معاينة جديد من ${v.name.trim()} · ${l.title} · ${slot.day} ${slot.time}`, '#market');
   };
-  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>طلب معاينة</h2><span class="mut" style="font-size:13px">${esc(l.title)} · ${esc(l.area)}</span>
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>احجز موعد معاينة</h2><span class="mut" style="font-size:13px">${esc(l.title)} · ${esc(l.area)}</span>
+    <fieldset class="prio"><legend>اليوم</legend><div class="chipsel days">${days.map((d, i) => `<label><input type="radio" name="day" value="${dayKey(d)}" ${i === 0 ? 'checked' : ''}><span><small>${WD[d.getDay()]}</small><b class="num">${d.getDate()}</b><small>${MONTHS[d.getMonth()]}</small></span></label>`).join('')}</div></fieldset>
+    <fieldset class="prio"><legend>الوقت المتاح</legend><div class="chipsel times" id="slotTimes">${times.map((x, i) => `<label><input type="radio" name="time" value="${x}" ${i === 0 ? 'checked' : ''}><span class="num">${x}</span></label>`).join('')}</div><small class="mut" id="slotNote"></small></fieldset>
     <label for="f-name">اسمك<input id="f-name" name="name" required value="${esc(t ? t.name : '')}"></label>
     <label for="f-phone">رقم الهاتف أو واتساب<input id="f-phone" name="phone" type="tel" required placeholder="+968" value="${esc(t ? t.phone : '')}"></label>
-    <label for="f-when">الوقت المناسب للمعاينة<select id="f-when" name="when">${['صباحًا', 'مساءً', 'عطلة نهاية الأسبوع', 'أي وقت'].map((x) => `<option>${x}</option>`).join('')}</select></label>
-    <label for="f-msg">رسالة<textarea id="f-msg" name="msg">مرحبًا، هل الوحدة ما زالت متاحة؟ أرغب في معاينتها.</textarea></label>
-    <div class="acts"><button class="btn" type="submit">إرسال الطلب</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+    <label for="f-msg">رسالة<textarea id="f-msg" name="msg">مرحبًا، أرغب في معاينة الوحدة في الموعد المختار.</textarea></label>
+    <div class="acts"><button class="btn" type="submit">تأكيد الحجز</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
   $('#sheet').hidden = false;
+  const sync = () => { const dk = ($('#sheetForm input[name=day]:checked') || {}).value; let firstFree = null; let n = 0; document.querySelectorAll('#slotTimes input').forEach((i) => { const busy = taken.has(dk + ' ' + i.value); i.disabled = busy; i.closest('label').classList.toggle('busy', busy); if (busy) { n++; if (i.checked) i.checked = false; } else if (!firstFree) firstFree = i; }); if (!document.querySelector('#slotTimes input:checked') && firstFree) firstFree.checked = true; $('#slotNote').textContent = n === 1 ? 'موعد واحد محجوز في هذا اليوم' : n === 2 ? 'موعدان محجوزان في هذا اليوم' : n ? `${n} مواعيد محجوزة في هذا اليوم` : ''; };
+  $('#sheetForm').addEventListener('change', (e) => { if (e.target.name === 'day') sync(); });
+  sync();
 }
 function listingForm(id, unitId) {
   const l = id ? lOf(id) : null;
@@ -779,13 +877,13 @@ function listingForm(id, unitId) {
     const photos = [];
     for (const f of files) { const p = await readImage(f, 800, 0.62); if (p) photos.push(p); }
     const k = u ? hashK(u.buildingId) : l ? ((l.art && l.art[0] && l.art[0][1]) || 0) : Math.floor(Math.random() * PAL.length);
-    const data = { title: v.title.trim(), type: v.type, area: v.area, rent: Number(v.rent), beds: Number(v.beds), baths: Number(v.baths), size: Number(v.size) || 0, furnished: v.furnished, feats: v.$all('feats'), desc: v.desc.trim(), phone: v.phone.trim() };
+    const data = { title: v.title.trim(), type: v.type, area: v.area, rent: Number(v.rent), beds: Number(v.beds), baths: Number(v.baths), size: Number(v.size) || 0, furnished: v.furnished, feats: v.$all('feats'), desc: v.desc.trim(), phone: v.phone.trim(), times: v.$all('times').length ? v.$all('times') : DEF_TIMES.slice() };
     if (l) {
       Object.assign(l, data);
       if (photos.length) l.photos = photos; l.art = artFor(l.type, k);
       toast('تم حفظ الإعلان');
     } else {
-      mkt.listings.unshift(Object.assign({ id: uid('l'), status: 'active', mine: true, owner: 'سالم العبري', inquiries: [], views: 0, date: today(), ts: Date.now(), unitId: v.unitId || '', photos, art: artFor(data.type, k) }, data));
+      mkt.listings.unshift(Object.assign({ id: uid('l'), status: 'active', mine: true, verified: false, featured: false, owner: 'سالم العبري', inquiries: [], views: 0, date: today(), ts: Date.now(), unitId: v.unitId || '', photos, art: artFor(data.type, k) }, data));
       mf.tab = 'mine';
       toast(photos.length ? 'تم نشر إعلانك مع ' + photos.length + ' صور' : 'تم نشر إعلانك');
     }
@@ -799,8 +897,10 @@ function listingForm(id, unitId) {
     <label for="f-title">عنوان الإعلان<input id="f-title" name="title" required value="${esc(d.title)}" placeholder="مثال: شقة غرفتين قرب البحر"></label>
     <div class="row2"><label>النوع${picker('type', LTYPES, d.type)}</label><label>المنطقة${picker('area', AREAS, d.area)}</label></div>
     <div class="row3"><label for="f-rent">الإيجار الشهري (ر.ع.)<input id="f-rent" name="rent" type="number" min="1" required value="${esc(d.rent)}"></label><label for="f-size">المساحة (م²)<input id="f-size" name="size" type="number" min="0" value="${esc(d.size || '')}"></label><label for="f-furnished">الأثاث${sel('furnished', [['no', 'غير مفروشة'], ['yes', 'مفروشة']], d.furnished)}</label></div>
+    <div id="fairHint">${fairNote(d)}</div>
     <div class="row2"><label for="f-beds">غرف النوم${sel('beds', [[0, 'استوديو'], 1, 2, 3, 4, 5, 6].map((x) => (Array.isArray(x) ? x : [x, x])), d.beds)}</label><label for="f-baths">الحمّامات${sel('baths', [1, 2, 3, 4, 5, 6].map((x) => [x, x]), d.baths)}</label></div>
     <fieldset class="prio"><legend>المميزات</legend><div class="checks">${FEATS.map((f) => `<label><input type="checkbox" name="feats" value="${esc(f)}" ${(d.feats || []).includes(f) ? 'checked' : ''}>${esc(f)}</label>`).join('')}</div></fieldset>
+    <fieldset class="prio"><legend>أوقات المعاينة المتاحة</legend><div class="checks">${TIMES.map((x) => `<label><input type="checkbox" name="times" value="${x}" ${(d.times || DEF_TIMES).includes(x) ? 'checked' : ''}><span class="num">${x}</span></label>`).join('')}</div><small class="mut">يحجز الباحث عن سكن من هذه الأوقات مباشرة، كل يوم عدا الجمعة.</small></fieldset>
     <label for="f-desc">الوصف<textarea id="f-desc" name="desc" placeholder="الطابق، القرب من الخدمات، مدة العقد، ما يشمله الإيجار…">${esc(d.desc)}</textarea></label>
     <label for="f-phone">رقم واتساب للتواصل (اختياري)<input id="f-phone" name="phone" type="tel" placeholder="+968" value="${esc(d.phone || '')}"></label>
     <div class="acts"><button class="btn" type="submit">${l ? 'حفظ' : 'نشر الإعلان'}</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
@@ -809,13 +909,18 @@ function listingForm(id, unitId) {
 }
 let previewK = 0;
 document.addEventListener('input', (e) => {
-  if (e.target.name !== 'type' || !e.target.closest('#sheetForm')) return;
+  const f = e.target.closest('#sheetForm'); if (!f) return;
+  if (['rent', 'type', 'area', 'beds', 'furnished', 'size'].includes(e.target.name) && $('#fairHint')) { const v = Object.fromEntries(new FormData(f).entries()); $('#fairHint').innerHTML = fairNote(v); }
+  if (e.target.name !== 'type') return;
   const pre = $('#artPre'); if (pre) pre.src = artURI(artFor(e.target.value, previewK)[0][0], previewK);
 });
 function refreshResults() {
   const box = $('#mres'); if (!box) return;
-  const [n, cards] = mResults(document.body.classList.contains('tenant'));
-  box.innerHTML = cards; $('#mcount').innerHTML = `<span class="num">${n}</span> إعلان`;
+  const [n, cards, list] = mResults(document.body.classList.contains('tenant'));
+  box.innerHTML = cards;
+  const mc = $('.mcount'); if (mc) mc.innerHTML = `<span id="mcount"><span class="num">${n}</span> إعلان</span>${hasFilters(mf) ? ' · <button type="button" class="clearf" data-mk-clear>مسح الفلاتر</button>' : ''}`;
+  const sv = $('[data-ss-save]'); if (sv) { sv.disabled = !hasFilters(mf); sv.title = sv.disabled ? 'اختر فلاتر أولًا' : ''; }
+  if ($('#mmap') && typeof drawMap === 'function') drawMap(list);
 }
 document.addEventListener('input', (e) => { const k = e.target.dataset && e.target.dataset.mf; if (!k) return; mf[k] = e.target.value; refreshResults(); if (k === 'q') showSugg(e.target.value); });
 
@@ -909,7 +1014,8 @@ document.addEventListener('click', (e) => {
 function route() {
   const h = location.hash.slice(1);
   if (h.startsWith('building-')) return ['buildings', building(h.slice(9))];
-  const pages = { overview, rent, buildings, maintenance, prefs, 't-home': tHome, 't-pay': tPay, 't-requests': tRequests, 't-receipts': tReceipts, market: () => market(false), 't-market': () => market(true) };
+  const pages = { overview, rent, buildings, maintenance, prefs, 't-home': tHome, 't-pay': tPay, 't-requests': tRequests, 't-receipts': tReceipts, market: () => market(false), 't-market': () => market(true) }
+  Object.assign(pages, window.EXTRA_PAGES || {});
   const p = pages[h] ? h : 'overview';
   return [p, pages[p]()];
 }
@@ -922,6 +1028,7 @@ function render() {
   moveIndicator();
   document.querySelectorAll('.links a').forEach((a) => a.classList.toggle('on', a.dataset.page === page));
   document.querySelectorAll('.side [data-set-theme], .mhead [data-set-theme]').forEach((b) => b.classList.toggle('on', b.dataset.setTheme === document.documentElement.dataset.mode));
+  if (typeof afterRender === 'function') afterRender(page);
   const tc = document.querySelector('meta[name=theme-color]'); if (tc) tc.content = getComputedStyle(document.documentElement).getPropertyValue('--sheet').trim() || '#0C0C0E';
 }
 
@@ -1027,6 +1134,7 @@ document.addEventListener('submit', (e) => {
     persist(); render(); const u = openUnitId && unitOf(openUnitId); if (u && location.hash.startsWith('#building-')) openUnit(u.id); else openUnitId = null; }
 });
 document.addEventListener('change', (e) => {
+  if (e.target.dataset && e.target.dataset.mf) return;
   if (e.target.id === 'who') { meId = e.target.value; save('sakan-tenant', meId); render(); return; }
   if (e.target.id === 'f-photo') {
     const f = e.target.files && e.target.files[0], box = e.target.closest('.drop'); if (!f || !box) return;
@@ -1037,4 +1145,4 @@ document.addEventListener('change', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) { closeSheet(); openUnitId = null; } });
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') { closeSheet(); openUnitId = null; } });
 window.addEventListener('hashchange', () => { selUnit = null; openUnitId = null; closeSheet(); render(); window.scrollTo(0, 0); });
-render();
+// first render happens at the end of features.js
