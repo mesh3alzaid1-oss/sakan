@@ -613,3 +613,35 @@ table.mini th,table.mini td{padding:6px 8px;border-bottom:1px solid var(--line);
 }
 
 .lg i.thr{height:0;border-radius:0;background:none;border-top:2px dashed #E5484D}
+
+/* ---------- Round 3: notifications, tenant tools ---------- */
+.dbrand{position:relative}
+.bellbtn{position:relative;width:42px;height:42px;border:0;border-radius:14px;background:var(--row);color:var(--fg);display:grid;place-items:center;cursor:pointer;flex:none}
+.dbrand .bellbtn{position:absolute;top:0;left:0}
+.bellbtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.bellbtn:focus-visible{outline:2px solid var(--active);outline-offset:2px}
+.bdot{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:99px;background:#E5484D;color:#fff;font:800 11px/20px var(--num);text-align:center}
+.bdot[hidden]{display:none}
+.mtools{display:flex;align-items:center;gap:8px}
+.notes{display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow:auto}
+.note{display:flex;gap:10px;align-items:flex-start;text-align:right;border:0;background:var(--row);color:var(--fg);border-radius:14px;padding:10px 12px;font:inherit;font-size:14px;cursor:pointer}
+.note .grow{display:flex;flex-direction:column;gap:2px;flex:1}
+.note small{font-size:12px}
+.ndot{width:9px;height:9px;border-radius:99px;margin-top:8px;background:transparent;flex:none}
+.note.unread{box-shadow:inset 0 0 0 1px var(--active)}.note.unread .ndot{background:#E5484D}
+.note:hover{filter:brightness(1.08)}
+.togs{display:flex;flex-direction:column;gap:6px}
+.tog{flex-direction:row!important;align-items:center;gap:10px;background:var(--input);padding:10px 12px;border-radius:14px;cursor:pointer}
+.tog span{display:flex;flex-direction:column}.tog small{color:var(--mut);font-size:12px;font-weight:500}
+.tog input{width:20px;height:20px;accent-color:#C6F36B}
+.mseg{max-width:420px}
+.paysum{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:#0C0C0E;color:#F4F4F1}
+.paysum b{color:#C6F36B;font-size:22px}
+.rate{display:flex;align-items:center;gap:2px;margin-top:6px}
+.rate button{border:0;background:none;font-size:22px;color:rgba(128,128,128,.4);cursor:pointer;padding:0 2px;line-height:1}
+.rate button.on{color:#F5B301}
+.rate button:focus-visible{outline:2px solid var(--active);border-radius:6px}
+.annrow{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+.annrow .grow{display:flex;flex-direction:column;gap:2px;flex:1}
+#sheetless .doc{max-width:860px}
+@media (max-width:760px){.mhead .seg{width:auto}}

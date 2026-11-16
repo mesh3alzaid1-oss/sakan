@@ -12,3 +12,9 @@ Brand: the ن mark, black and lime, Noto Kufi Arabic.
 Live site: https://mesh3alzaid1-oss.github.io/sakan/ · phone preview: /preview.html
 
 All names and amounts are sample data. Changes are saved only in the viewer's browser.
+
+## Demo features (sample data, saved in the browser)
+- **Marketplace:** map view, viewing calendar with time slots, accept an inquiry as a tenant (creates the tenant and contract), saved searches with alerts, verified badges, owner ratings and reviews, fair-price hint, featured ads.
+- **Owner:** e-sign contracts with renewals and 60-day expiry alerts, finance page (expenses, profit per building, 12-month collection trend), printable monthly report, technician assignment with WhatsApp message, building announcements, payment reminders with auto-reminder schedule, notifications.
+- **Tenant:** pay several months ahead, rental record certificate, contract signing on the phone, building announcements, rate finished repairs, notifications.
+- Map library: Leaflet 1.9.4 (BSD-2, in `vendor/leaflet`), tiles from CARTO / OpenStreetMap.

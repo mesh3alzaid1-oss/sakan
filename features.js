@@ -117,7 +117,14 @@ function seedOwnerExtras() {
     const end = new Date(now); end.setDate(end.getDate() + (soon[t.id] ?? (70 + ((i * 37) % 280))));
     const start = new Date(end); start.setFullYear(start.getFullYear() - 1); start.setDate(start.getDate() + 1);
     const sent = t.id === 'tb4-2' || t.id === 'tb4-4';
-    db.contracts.push({ id: 'c' + t.id, tenantId: t.id, unitId: t.unitId, start: iso(start), end: iso(end), rent: t.rent, deposit: t.rent, status: sent ? 'sent' : 'signed', signedAt: sent ? '' : iso(start) });
+    if (sent) {
+      const ns = new Date(now.getFullYear(), now.getMonth() + 1, 1, 12), ne = new Date(ns); ne.setFullYear(ne.getFullYear() + 1); ne.setDate(ne.getDate() - 1);
+      const os = new Date(ns); os.setFullYear(os.getFullYear() - 1); const oe = new Date(ns); oe.setDate(oe.getDate() - 1);
+      db.contracts.push({ id: 'co' + t.id, tenantId: t.id, unitId: t.unitId, start: iso(os), end: iso(oe), rent: t.rent, deposit: t.rent, status: 'renewed', signedAt: iso(os) });
+      db.contracts.push({ id: 'c' + t.id, tenantId: t.id, unitId: t.unitId, start: iso(ns), end: iso(ne), rent: t.rent, deposit: t.rent, status: 'sent', signedAt: '' });
+      return;
+    }
+    db.contracts.push({ id: 'c' + t.id, tenantId: t.id, unitId: t.unitId, start: iso(start), end: iso(end), rent: t.rent, deposit: t.rent, status: 'signed', signedAt: iso(start) });
   });
   if (!db.expenses) {
     const m = (d) => iso(new Date(now.getFullYear(), now.getMonth() + (d < 0 ? -1 : 0), Math.abs(d) || 1, 12));
@@ -138,6 +145,7 @@ function seedOwnerExtras() {
     const exp = db.tenants.reduce((a, t) => a + Number(t.rent), 0);
     db.history = pcts.map((p, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { m: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, short: MONTHS[d.getMonth()], exp: Math.round(exp * (0.94 + i * 0.005)), pct: p }; });
   }
+  if (typeof seedNotes === 'function') seedNotes();
   persist();
 }
 seedOwnerExtras();
@@ -390,10 +398,194 @@ document.addEventListener('click', (e) => {
   else if ('sigClear' in d) { const cv = $('#sigpad'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); cv._drawn = false; }
   else if (d.cNudge) { const c = db.contracts.find((x) => x.id === d.cNudge); const t = tOf(c.tenantId); if (typeof notify === 'function') notify(t.id, 'تذكير: عقد إيجارك بانتظار توقيعك', '#t-contract'); toast('تم إرسال تذكير بالتوقيع إلى ' + t.name); }
   else if ('cNew' in d) { const free = db.tenants.filter((t) => !contractOf(t.id)); if (free.length) { onTenantAdded(free[0]); toast('أُنشئ عقد لـ ' + free[0].name); render(); } else { addTenant(); } }
-  else if ('printDoc' in d) { document.body.classList.add('printdoc'); window.print(); setTimeout(() => document.body.classList.remove('printdoc'), 500); }
+  else if ('printDoc' in d) { if ($('#sheet').hidden) { window.print(); return; } document.body.classList.add('printdoc'); window.print(); setTimeout(() => document.body.classList.remove('printdoc'), 500); }
   else if ('expAdd' in d) addExpense();
   else if (d.expDel) { db.expenses = db.expenses.filter((x) => x.id !== d.expDel); persist(); toast('تم حذف المصروف'); render(); }
   else if (d.tech) assignTech(d.tech);
+});
+
+
+/* ================= Notifications ================= */
+const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function notify(to, text, link = '') { db.notes = db.notes || []; db.notes.unshift({ id: uid('n'), to, text, link, date: today(), time: nowTime(), read: false }); persist(); updateBell(); }
+function seedNotes() {
+  if (db.notes) return;
+  const n = (to, text, link, date, time, read = false) => ({ id: uid('n'), to, text, link, date, time, read });
+  db.notes = [
+    n('owner', 'أحمد خان رفع إيصال تحويل بمبلغ 300 ر.ع. للمراجعة', '#rent', today(), '09:12'),
+    n('owner', 'سجّلت لينا طلب صيانة من مكالمة: المكيف لا يبرد · برج الخوير شقة 12', '#maintenance', today(), '08:40'),
+    n('owner', 'طلب معاينة جديد من عبدالله الشكيلي · شقة غرفتين بإطلالة على البحر', '#market', today(), '07:55'),
+    n('owner', 'عقد سيف الكندي ينتهي خلال أقل من أسبوعين · جدّده الآن', '#contracts', 'أمس', '18:20', true),
+    n('tb4-2', 'تذكير: إيجار نوفمبر (450 ر.ع.) يستحق بعد يومين', '#t-pay', today(), '09:00'),
+    n('tb4-2', 'عقد إيجارك جاهز للتوقيع من هاتفك', '#t-contract', 'أمس', '16:10'),
+    n('tb4-2', 'إعلان من الإدارة: تنظيف المسبح يوم السبت من 9 إلى 12 ظهرًا', '#t-home', 'أمس', '11:00', true)
+  ];
+  db.anns = db.anns || [
+    { id: 'a1', bid: 'b4', kind: 'صيانة', title: 'تنظيف المسبح يوم السبت', text: 'سيكون المسبح مغلقًا من 9 صباحًا حتى 12 ظهرًا للتنظيف الدوري.', date: 'أمس' },
+    { id: 'a2', bid: 'b1', kind: 'انقطاع ماء', title: 'انقطاع الماء يوم الخميس', text: 'ينقطع الماء من 10 صباحًا إلى 2 ظهرًا لصيانة الخزان الرئيسي. نعتذر عن الإزعاج.', date: 'اليوم' }
+  ];
+  db.autoRemind = db.autoRemind || { before: true, due: true, after: true, lina: false };
+  persist();
+}
+seedNotes();
+const myNotes = () => { const ten = document.body.classList.contains('tenant'); const who = ten ? (me() || {}).id : 'owner'; return (db.notes || []).filter((x) => x.to === who); };
+function updateBell() { const n = myNotes().filter((x) => !x.read).length; document.querySelectorAll('.bdot').forEach((b) => { b.textContent = n || ''; b.hidden = !n; }); document.querySelectorAll('[data-bell]').forEach((b) => b.setAttribute('aria-label', n ? `الإشعارات · ${n} جديدة` : 'الإشعارات')); }
+function openBell() {
+  const list = myNotes();
+  sheetSave = null;
+  $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="الإشعارات"><div class="tools" style="margin:0"><h2>الإشعارات</h2>${list.some((x) => !x.read) ? '<button class="btn soft small" data-note-all>تحديد الكل كمقروء</button>' : ''}</div>
+    <p class="mut" style="margin:0;font-size:13px">تصلك أيضًا على واتساب وفي إشعارات الهاتف.</p>
+    <div class="notes">${list.map((x) => `<button type="button" class="note ${x.read ? '' : 'unread'}" data-note-go="${x.id}"><span class="ndot" aria-hidden="true"></span><span class="grow"><span>${esc(x.text)}</span><small class="mut">${esc(x.date)} · <span class="num">${esc(x.time)}</span></small></span></button>`).join('') || '<p class="mut">لا توجد إشعارات.</p>'}</div>
+    <div class="bars"><button class="btn soft" data-close>إغلاق</button></div></div>`;
+  $('#sheet').hidden = false;
+}
+function remindSheet(id) {
+  const t = tOf(id); if (!t) return;
+  const msg = `مرحبًا ${t.name.split(' ')[0]}، تذكير لطيف بأن إيجار ${CUR} (${fmt(t.rent)} ر.ع.) لـ ${place(t.unitId)} ${t.status === 'late' ? 'متأخر' : 'يستحق في ' + t.due}. يمكنك الدفع من تطبيق سكن مباشرة. شكرًا لك — سالم`;
+  sheetSave = (v) => {
+    notify(t.id, `تذكير من المالك: إيجار ${CUR} (${fmt(t.rent)} ر.ع.) ${t.status === 'late' ? 'متأخر' : 'مستحق'}`, '#t-pay');
+    toast(v.lina ? `أُرسل التذكير وستتصل لينا بـ ${t.name} (تجريبي)` : `أُرسل التذكير إلى ${t.name} (تجريبي)`);
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>تذكير ${esc(t.name)}</h2><span class="mut" style="font-size:13px">${esc(place(t.unitId))} · ${pill(t)}</span>
+    <div class="wa"><span class="mut" style="font-size:12px">الرسالة على واتساب</span><div class="bubble">${esc(msg)}</div></div>
+    <fieldset class="prio"><legend>القنوات</legend><div class="checks"><label><input type="checkbox" name="wa" checked> واتساب</label><label><input type="checkbox" name="sms"> رسالة نصية</label><label><input type="checkbox" name="app" checked> إشعار التطبيق</label><label><input type="checkbox" name="lina"> مكالمة من لينا</label></div></fieldset>
+    <div class="acts"><button class="btn" type="submit">إرسال التذكير</button><a class="btn soft" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${t.phone ? waLink(t.phone).split('/').pop() : ''}?text=${encodeURIComponent(msg)}">فتح في واتساب</a><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function remindAllSheet() {
+  const un = totals().unpaid; const a = db.autoRemind;
+  sheetSave = (v) => {
+    db.autoRemind = { before: !!v.before, due: !!v.due, after: !!v.after, lina: !!v.lina };
+    if (v.now) un.forEach((t) => notify(t.id, `تذكير من المالك: إيجار ${CUR} (${fmt(t.rent)} ر.ع.)`, '#t-pay'));
+    toast(v.now ? `أُرسل ${un.length} تذكيرات وحُفظ الجدول التلقائي` : 'تم حفظ التذكير التلقائي');
+  };
+  const ck = (k, t, s) => `<label class="tog"><input type="checkbox" name="${k}" ${a[k] ? 'checked' : ''}><span><b>${t}</b><small>${s}</small></span></label>`;
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>التذكير التلقائي</h2><p class="mut" style="margin:0">يرسل سكن التذكيرات بنفسه على واتساب، فلا تحتاج لملاحقة أحد.</p>
+    <div class="togs">${ck('before', 'قبل الاستحقاق بـ 3 أيام', 'رسالة لطيفة مع رابط الدفع')}${ck('due', 'يوم الاستحقاق', 'تذكير صباحي الساعة 9')}${ck('after', 'بعد التأخر بـ 3 أيام', 'تذكير أوضح مع إشعار لك')}${ck('lina', 'مكالمة من لينا بعد 7 أيام تأخير', 'لينا تتصل بالمستأجر وتسجل موعد الدفع')}</div>
+    <label class="chk"><input type="checkbox" name="now" checked> أرسل الآن أيضًا إلى <span class="num">${un.length}</span> لم يدفعوا</label>
+    <div class="acts"><button class="btn" type="submit">حفظ وإرسال</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+
+/* ================= Announcements ================= */
+function annForm(bid) {
+  const b = bOf(bid);
+  openForm('إعلان لسكان ' + b.name, [
+    { key: 'kind', label: 'النوع', type: 'pick', value: 'عام', options: ['عام', 'انقطاع ماء', 'انقطاع كهرباء', 'صيانة', 'أمن وسلامة'].map((x) => ({ value: x, label: x })) },
+    { key: 'title', label: 'العنوان', required: true, placeholder: 'مثال: انقطاع الماء يوم الخميس' },
+    { key: 'text', label: 'التفاصيل', placeholder: 'الوقت، المدة، وما المطلوب من السكان' }
+  ], (v) => {
+    db.anns = db.anns || []; db.anns.unshift({ id: uid('a'), bid, kind: v.kind, title: v.title.trim(), text: v.text.trim(), date: 'اليوم' });
+    const ts = db.tenants.filter((t) => unitOf(t.unitId)?.buildingId === bid);
+    ts.forEach((t) => notify(t.id, `إعلان من الإدارة: ${v.title.trim()}`, '#t-home'));
+    toast(`وصل الإعلان إلى ${ts.length} مستأجرًا على واتساب والتطبيق`);
+  }, 'إرسال للسكان');
+}
+
+/* ================= Tenant pages ================= */
+let payMonths = 1;
+const monthsAhead = (n) => { const d = new Date(); return Array.from({ length: n }, (_, i) => { const x = new Date(d.getFullYear(), d.getMonth() + i, 1); return `${MONTHS[x.getMonth()]} ${x.getFullYear()}`; }); };
+window.EXTRA_PAGES['t-pay'] = () => {
+  const t = me(); let html = tPay(); if (!t || t.status === 'paid' || t.status === 'receipt') return html;
+  const opts = [1, 2, 3, 6];
+  const ms = monthsAhead(payMonths);
+  const sel = `<section class="tile" style="margin-bottom:16px"><div class="head" style="margin:0"><h2>كم شهرًا تريد أن تدفع؟</h2><span class="mut" style="font-size:13px">ادفع مقدمًا وارتح من التذكيرات</span></div>
+    <div class="seg mseg">${opts.map((n) => `<button type="button" data-pay-months="${n}" class="${payMonths === n ? 'on' : ''}" aria-pressed="${payMonths === n}">${n === 1 ? 'شهر' : n === 2 ? 'شهران' : n + ' أشهر'}</button>`).join('')}</div>
+    <div class="paysum"><span>${ms.length > 1 ? `${ms[0]} ← ${ms[ms.length - 1]}` : ms[0]}</span><b><span class="num">${fmt(t.rent * payMonths)}</span> ر.ع.</b></div></section>`;
+  return html.replace('<div class="methods">', sel + '<div class="methods">');
+};
+function cardPayMulti() {
+  const t = me(); if (!t) return;
+  const n = payMonths, ms = monthsAhead(n);
+  sheetSave = () => {
+    markPaid(t.id, 'بطاقة (تجريبي)');
+    const rs = receiptsOf(t);
+    ms.slice(1).forEach((m) => rs.push({ id: uid('r'), month: m, amount: t.rent, date: today(), method: 'بطاقة · دفع مقدم (تجريبي)', status: 'ok' }));
+    if (n > 1) { t.paidUntil = ms[n - 1]; t.note = 'مدفوع حتى ' + ms[n - 1]; }
+    notify('owner', `${t.name} دفع ${n > 1 ? n + ' أشهر مقدمًا' : 'إيجار ' + CUR} · ${fmt(t.rent * n)} ر.ع.`, '#rent');
+    payMonths = 1; location.hash = '#t-receipts';
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>الدفع بالبطاقة</h2>
+    <p style="margin:0">في النسخة الحقيقية تفتح هنا صفحة دفع آمنة من بوابة دفع عُمانية، ويصل المبلغ لحساب المالك مباشرة ويُسجَّل الإيصال تلقائيًا.</p>
+    <p class="mut" style="margin:0">هذه نسخة تجريبية ولن يتم خصم أي مبلغ.</p>
+    <div class="kvs"><div class="kv"><span class="mut">المبلغ</span><b><span class="num">${fmt(t.rent * n)}</span> ر.ع.</b></div><div class="kv"><span class="mut">${n > 1 ? 'الأشهر' : 'الشهر'}</span><b>${n > 1 ? `${ms[0]} ← ${ms[n - 1]}` : ms[0]}</b></div></div>
+    <div class="acts"><button class="btn" type="submit">محاكاة دفع ناجح</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function record(t) {
+  const rs = receiptsOf(t).filter((r) => r.status === 'ok');
+  const c = db.contracts && db.contracts.filter((x) => x.tenantId === t.id).sort((a, b) => a.start.localeCompare(b.start))[0];
+  const late = t.status === 'late' ? 1 : 0;
+  const onTime = Math.round(((rs.length) / Math.max(1, rs.length + late)) * 100);
+  return { since: c ? arDate(c.start) : '—', paid: rs.reduce((a, r) => a + Number(r.amount), 0), months: rs.length, onTime };
+}
+function recordDoc(t) {
+  const r = record(t), score = r.onTime >= 95 ? 'ممتاز' : r.onTime >= 80 ? 'جيد' : 'يحتاج تحسين';
+  return `<article class="doc" id="doc"><header><span class="rlogo"><svg class="mark" width="30" height="30" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg>سكن</span><span>صدرت ${arDate(iso(new Date()))}</span></header>
+    <h2>شهادة سجل إيجار</h2><p style="text-align:center">نشهد بأن <b>${esc(t.name)}</b> مستأجر في ${esc(place(t.unitId))} منذ ${r.since}.</p>
+    <div class="kpis"><div><span>الالتزام بالدفع</span><b class="num">${r.onTime}%</b></div><div><span>التقييم</span><b>${score}</b></div><div><span>أشهر مدفوعة عبر سكن</span><b class="num">${r.months}</b></div><div><span>إجمالي المدفوع</span><b><span class="num">${fmt(r.paid)}</span> ر.ع.</b></div></div>
+    <p>يمكن للمؤجّر الجديد التحقق من هذه الشهادة برمز التحقق: <b class="num" dir="ltr">SKN-${esc(t.id.toUpperCase().slice(-5))}-${r.months}${r.onTime}</b></p>
+    <footer>شهادة تجريبية من سكن · الأرقام أمثلة.</footer></article>`;
+}
+window.EXTRA_PAGES['t-receipts'] = () => {
+  const t = me(); let html = tReceipts(); if (!t) return html;
+  const r = record(t);
+  const tile = `<section class="tile rec" style="margin-bottom:16px"><div class="tools" style="margin:0"><div><h2>سجل الإيجار</h2><span class="mut" style="font-size:13px">أثبت لأي مالك جديد أنك مستأجر ملتزم.</span></div><button class="btn" data-rec-view>عرض الشهادة</button></div>
+    <div class="kvs"><div class="kv"><span class="mut">الالتزام بالدفع</span><b class="num">${r.onTime}%</b></div><div class="kv"><span class="mut">مستأجر منذ</span><b>${r.since}</b></div><div class="kv"><span class="mut">أشهر مدفوعة</span><b class="num">${r.months}</b></div><div class="kv"><span class="mut">إجمالي المدفوع</span><b><span class="num">${fmt(r.paid)}</span> ر.ع.</b></div></div></section>`;
+  return html.replace('<div class="receipts">', tile + '<div class="receipts">');
+};
+window.EXTRA_PAGES['t-contract'] = () => {
+  const t = me(); if (!t) return noTenant();
+  const c = contractOf(t.id);
+  if (!c) return `<div class="tools"><h1>عقدي</h1>${whoSel()}</div><section class="tile empty">لا يوجد عقد مسجّل بعد. سيظهر هنا عندما يرسله المالك.</section>`;
+  const d = daysTo(c.end);
+  const banner = c.status === 'sent' ? `<section class="tile c t2 alert" style="margin-bottom:16px"><span class="lbl">بانتظار توقيعك</span><span class="val" style="font-size:24px">راجع العقد ووقّعه من هاتفك</span><button class="btn" style="align-self:flex-start" data-c-sign="${c.id}">توقيع العقد</button></section>`
+    : `<section class="tile c hero" style="margin-bottom:16px"><span class="lbl">عقد ساري</span><span class="val" style="font-size:24px">ينتهي ${arDate(c.end)}</span><span style="font-weight:600">${d <= 60 ? `باقٍ <span class="num">${d}</span> يومًا · سيرسل لك المالك عرض التجديد هنا` : `باقٍ <span class="num">${d}</span> يومًا`}</span></section>`;
+  return `<div class="tools"><h1>عقدي</h1><div class="bars">${whoSel()}<button class="btn soft" data-print-doc>طباعة / حفظ PDF</button></div></div>${banner}<div id="sheetless">${contractDoc(c)}</div>`;
+};
+function jobCard(j) {
+  const n = STEP[j.status];
+  const k = j.tech && db.techs && db.techs.find((x) => x.id === j.tech);
+  return `<article class="jobrow">${j.photo ? `<img class="thumb" src="${esc(j.photo)}" alt="صورة الطلب">` : ''}<div class="grow">
+    <div class="tools" style="margin:0"><b>${esc(j.title)}</b><span class="pill ${j.status === 'done' ? 'ok' : j.status === 'new' ? 'new' : 'due'}">${STEP_TXT[j.status]}</span></div>
+    ${j.desc ? `<span style="font-size:14px">${esc(j.desc)}</span>` : ''}
+    <span class="mut" style="font-size:12px">${esc([j.cat, j.date, j.urgent ? 'عاجل' : ''].filter(Boolean).join(' · ') || j.from)}</span>
+    ${k ? `<span class="techline">${esc(k.name)} · ${esc(k.trade)}${j.visit ? ' · ' + esc(j.visit) : ''}</span>` : ''}
+    <div class="steps" aria-hidden="true"><span class="${n >= 1 ? 'on' : ''}"></span><span class="${n >= 2 ? 'on' : ''}"></span><span class="${n >= 3 ? 'on' : ''}"></span></div>
+    <div class="steplbl" aria-hidden="true"><span>تم الاستلام</span><span>قيد التنفيذ</span><span>تم الإصلاح</span></div>
+    ${j.status === 'done' && document.body.classList.contains('tenant') ? `<div class="rate" role="group" aria-label="قيّم الخدمة"><span class="mut" style="font-size:13px">${j.rating ? 'تقييمك:' : 'كيف كانت الخدمة؟'}</span>${[1, 2, 3, 4, 5].map((i) => `<button type="button" data-rate="${j.id}|${i}" class="${(j.rating || 0) >= i ? 'on' : ''}" aria-label="${i} من 5">★</button>`).join('')}</div>` : ''}
+  </div></article>`;
+}
+window.EXTRA_PAGES['t-home'] = () => {
+  const t = me(); let html = tHome(); if (!t) return html;
+  const u = unitOf(t.unitId); const anns = (db.anns || []).filter((a) => u && a.bid === u.buildingId).slice(0, 2);
+  const c = contractOf(t.id);
+  const extra = (c && c.status === 'sent' ? `<section class="tile s2 c t3"><span class="lbl">عقدك بانتظار توقيعك</span><span style="font-weight:600">من ${arDate(c.start)} إلى ${arDate(c.end)} · <span class="num">${fmt(c.rent)}</span> ر.ع. شهريًا</span><a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-contract">مراجعة وتوقيع</a></section>` : '')
+    + (anns.length ? `<section class="tile ${c && c.status === 'sent' ? 's2' : 's4'} ann"><div class="head" style="margin:0"><h2>إعلانات المبنى</h2></div>${anns.map((a) => `<div class="annrow"><span class="pill ${/انقطاع/.test(a.kind) ? 'late' : 'new'}">${esc(a.kind)}</span><span class="grow"><b>${esc(a.title)}</b><span style="font-size:13px">${esc(a.text)}</span><small class="mut">${esc(a.date)}</small></span></div>`).join('')}</section>` : '');
+  if (t.paidUntil) html = html.replace('تم الدفع. شكرًا لك.', `تم الدفع. مدفوع مقدمًا حتى ${esc(t.paidUntil)}.`);
+  return html.replace('<section class="tile s4">', extra + '<section class="tile s4">');
+};
+function afterRender2() { updateBell(); }
+
+/* ================= Click handlers (round 3) ================= */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.remind) { e.stopImmediatePropagation(); remindSheet(d.remind); }
+  else if ('remindAll' in d) { e.stopImmediatePropagation(); remindAllSheet(); }
+  else if ('card' in d) { e.stopImmediatePropagation(); cardPayMulti(); }
+  else if ('transfer' in d) { e.stopImmediatePropagation(); uploadTransfer(); const f = $('#f-amount'); if (f) f.value = (me().rent * payMonths); }
+}, true);
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if ('bell' in d) openBell();
+  else if (d.noteGo) { const x = db.notes.find((n) => n.id === d.noteGo); if (x) { x.read = true; persist(); closeSheet(); updateBell(); if (x.link && location.hash !== x.link) location.hash = x.link; } }
+  else if ('noteAll' in d) { myNotes().forEach((x) => { x.read = true; }); persist(); updateBell(); openBell(); }
+  else if (d.ann) annForm(d.ann);
+  else if (d.payMonths) { payMonths = Number(d.payMonths); render(); }
+  else if ('recView' in d) { const t = me(); sheetSave = null; $('#sheet').innerHTML = `<div class="panel pop wide" role="dialog" aria-modal="true" aria-label="شهادة سجل إيجار">${recordDoc(t)}<div class="bars"><button class="btn" data-print-doc>طباعة / حفظ PDF</button><a class="btn soft" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`شهادة سجل إيجار من سكن · ${t.name} · الالتزام بالدفع ${record(t).onTime}% · رمز التحقق SKN-${t.id.toUpperCase().slice(-5)}`)}">مشاركة عبر واتساب</a><button class="btn soft" data-close>إغلاق</button></div></div>`; $('#sheet').hidden = false; }
+  else if (d.rate) { const [jid, n] = d.rate.split('|'); const j = db.jobs.find((x) => x.id === jid); if (j) { j.rating = Number(n); persist(); toast('شكرًا لتقييمك'); render(); } }
 });
 
 render();

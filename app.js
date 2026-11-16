@@ -330,7 +330,7 @@ function building(id) {
       : `<button type="button" class="unit vacant${sel}" data-unit="${u.id}" aria-pressed="${!!sel}"><img class="uimg" src="${unitArt(u)}" alt=""><b>${esc(u.label)}</b><span class="mut">شاغرة</span><span class="mut" style="font-size:13px"><span class="num">${fmt(u.rent)}</span> ر.ع. متوقع</span></button>`;
   }).join('');
   const detail = '';
-  return `<div class="tools"><a class="back" href="#buildings"><span class="ico" aria-hidden="true">${ICON.back}</span>كل المباني</a><div class="bars"><button class="btn" data-add-unit="${id}">إضافة وحدة</button><button class="btn soft" data-edit-building="${id}">تعديل المبنى</button><button class="btn danger" data-del-building="${id}">حذف المبنى</button></div></div>
+  return `<div class="tools"><a class="back" href="#buildings"><span class="ico" aria-hidden="true">${ICON.back}</span>كل المباني</a><div class="bars"><button class="btn" data-add-unit="${id}">إضافة وحدة</button><button class="btn soft" data-ann="${id}">إعلان للسكان</button><button class="btn soft" data-edit-building="${id}">تعديل المبنى</button><button class="btn danger" data-del-building="${id}">حذف المبنى</button></div></div>
     <div class="grid" style="grid-auto-rows:auto;margin-bottom:16px">
       <section class="tile c ${tone} s2"><span class="lbl">${esc(b.area)}</span><span style="font-family:var(--display);font-size:28px;line-height:1.7">${esc(b.name)}</span><span style="font-weight:600"><span class="num">${rented}</span> من <span class="num">${us.length}</span> مؤجرة</span></section>
       <section class="tile"><span class="mut">المحصّل</span><span class="val"><span class="num">${fmt(t.collected)}</span> ر.ع.</span><span class="mut">من <span class="num">${fmt(t.expected)}</span></span></section>
