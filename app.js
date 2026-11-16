@@ -95,12 +95,57 @@ function totals(list = db.tenants) {
   return { expected, collected, pct: expected ? Math.round((collected / expected) * 100) : 0, unpaid, late: unpaid.filter((t) => t.status === 'late').length };
 }
 
+/* ---------- Black and green picker (replaces native selects for type and area) ---------- */
+function picker(name, items, cur, opts = {}) {
+  const list = items.map((x) => (Array.isArray(x) ? x : [x, x]));
+  const now = list.find(([v]) => String(v) === String(cur)) || list[0];
+  const attrs = opts.mf ? `data-mf="${opts.mf}"` : `name="${name}"`;
+  return `<div class="pick" data-pick>
+    <input type="hidden" ${attrs} value="${esc(now[0])}">
+    <button type="button" class="pickbtn" ${opts.id ? `id="${opts.id}"` : ''} aria-haspopup="listbox" aria-expanded="false"><span class="pv">${esc(now[1])}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="picklist" role="listbox" hidden>${list.length > 8 ? '<input class="pickq" type="search" placeholder="ابحث…" aria-label="ابحث في القائمة">' : ''}${list.map(([v, t]) => `<button type="button" role="option" data-pv="${esc(v)}" aria-selected="${String(v) === String(now[0])}" class="${String(v) === String(now[0]) ? 'on' : ''}">${esc(t)}</button>`).join('')}</div>
+  </div>`;
+}
+function closePickers(except) { document.querySelectorAll('.pick.open').forEach((p) => { if (p !== except) { p.classList.remove('open'); p.querySelector('.picklist').hidden = true; p.querySelector('.pickbtn').setAttribute('aria-expanded', 'false'); } }); }
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.pickbtn'), opt = e.target.closest('.picklist [data-pv]');
+  if (btn) {
+    const p = btn.closest('.pick'), open = !p.classList.contains('open'); closePickers(p);
+    p.classList.toggle('open', open); p.querySelector('.picklist').hidden = !open; btn.setAttribute('aria-expanded', open);
+    if (open) { const on = p.querySelector('.picklist .on'); const q = p.querySelector('.pickq'); if (q) { q.value = ''; q.dispatchEvent(new Event('input')); q.focus(); } else if (on) on.focus(); if (on) on.scrollIntoView({ block: 'nearest' }); }
+    return;
+  }
+  if (opt) {
+    const p = opt.closest('.pick'), inp = p.querySelector('input[type=hidden]');
+    p.querySelectorAll('[data-pv]').forEach((o) => { o.classList.toggle('on', o === opt); o.setAttribute('aria-selected', o === opt); });
+    p.querySelector('.pv').textContent = opt.textContent; inp.value = opt.dataset.pv;
+    closePickers(); p.querySelector('.pickbtn').focus();
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  if (!e.target.closest('.pick')) closePickers();
+}, true);
+document.addEventListener('input', (e) => {
+  if (!e.target.classList.contains('pickq')) return;
+  const q = norm(e.target.value);
+  e.target.closest('.picklist').querySelectorAll('[data-pv]').forEach((o) => { o.hidden = !!q && !norm(o.textContent + ' ' + (AREA_EN[o.dataset.pv] || '')).includes(q); });
+});
+document.addEventListener('keydown', (e) => {
+  const p = e.target.closest && e.target.closest('.pick.open'); if (!p) return;
+  const opts = [...p.querySelectorAll('[data-pv]:not([hidden])')]; const i = opts.indexOf(document.activeElement);
+  if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); closePickers(); p.querySelector('.pickbtn').focus(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); (opts[i + 1] || opts[0])?.focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); (opts[i - 1] || opts[opts.length - 1])?.focus(); }
+  else if (e.key === 'Enter' && e.target.classList.contains('pickq')) { e.preventDefault(); opts[0]?.click(); }
+}, true);
+
 /* ---------- Sheet (form / confirm) ---------- */
 let sheetSave = null;
 function openForm(title, fields, onSave, saveText = 'حفظ') {
   sheetSave = onSave;
   const f = fields.map((x) => {
     const id = 'f-' + x.key;
+    if (x.type === 'pick') return `<label>${x.label}${picker(x.key, x.options.map((o) => [o.value, o.label]), x.value)}</label>`;
     if (x.type === 'select') return `<label for="${id}">${x.label}<select id="${id}" name="${x.key}">${x.options.map((o) => `<option value="${esc(o.value)}" ${o.value === x.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`;
     return `<label for="${id}">${x.label}<input id="${id}" name="${x.key}" type="${x.type || 'text'}" value="${esc(x.value ?? '')}" ${x.required ? 'required' : ''} ${x.type === 'number' ? 'min="0"' : ''} placeholder="${esc(x.placeholder || '')}"></label>`;
   }).join('');
@@ -127,10 +172,10 @@ function openUnit(id) {
        <div class="kvs">${info('الهاتف', `<span class="num" dir="ltr">${esc(tn.phone || 'غير مضاف')}</span>`)}${info('الإيجار الشهري', `<span class="num">${fmt(tn.rent)}</span> ر.ع.`)}${info('الاستحقاق', esc(tn.due))}${info('حالة الدفع', esc(STATUS[tn.status].text))}</div>
        <div><span class="mut" style="font-size:13px">طلبات الصيانة المفتوحة</span>${jobs.length ? jobs.map((j) => `<div class="row" style="padding:8px 0">${esc(j.title)}</div>`).join('') : '<p style="margin:4px 0 0">لا توجد</p>'}</div>
        <div class="bars">${tn.status !== 'paid' ? `<button class="btn" data-pay="${tn.id}">تم الدفع</button><button class="btn soft" data-remind="${tn.id}">تذكير</button>` : ''}<button class="btn soft" data-edit="${tn.id}">تعديل البيانات</button><button class="btn danger" data-del="${tn.id}">إخلاء الوحدة</button><button class="btn soft" data-close>إغلاق</button></div>`
-    : `<div><span class="mut">${esc(b.name)}</span><h2 style="font-size:22px">${esc(u.label)} · شاغرة</h2></div>
+    : `<div><span class="mut">${esc(b.name)} · ${esc(kindOf(u))}</span><h2 style="font-size:22px">${esc(u.label)} · شاغرة</h2></div>
        <div class="kvs">${info('الإيجار المتوقع', `<span class="num">${fmt(u.rent)}</span> ر.ع.`)}${info('الحالة', 'جاهزة للتأجير')}</div>
        <div class="bars"><button class="btn" data-add-tenant="${u.id}">إضافة مستأجر</button>${(() => { const l = mkt.listings.find((x) => x.unitId === u.id && x.status !== 'rented'); return l ? `<button class="btn soft" data-mk-open="${l.id}">عرض إعلانها في السوق</button>` : `<button class="btn soft" data-mk-unit="${u.id}">انشر في السوق</button>`; })()}<button class="btn soft" data-edit-unit="${u.id}">تعديل الوحدة</button><button class="btn danger" data-del-unit="${u.id}">حذف الوحدة</button><button class="btn soft" data-close>إغلاق</button></div>`;
-  $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="${esc(u.label)}">${body}</div>`;
+  $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="${esc(u.label)}"><img class="shead" src="${unitArt(u)}" alt="${esc(kindOf(u))}">${body}</div>`;
   $('#sheet').hidden = false;
 }
 
@@ -255,7 +300,8 @@ function buildings() {
     const t = totals(ts);
     const rented = us.filter((u) => u.tenantId).length;
     return `<a class="tile c ${TONES[i % 4]}" href="#building-${b.id}">
-      <span class="lbl">${esc(b.area)}</span>
+      <img class="bimg" src="${bldArt(b)}" alt="" loading="lazy">
+      <span class="lbl">${esc(b.area)} · ${esc(b.kind)}</span>
       <span style="font-family:var(--display);font-size:26px;line-height:1.7">${esc(b.name)}</span>
       <span style="font-weight:600"><span class="num">${rented}</span> من <span class="num">${us.length}</span> مؤجرة · <span class="num">${us.length - rented}</span> شاغرة</span>
       <div class="bar" aria-hidden="true"><i style="width:${us.length ? Math.round((rented / us.length) * 100) : 0}%"></i></div>
@@ -277,8 +323,8 @@ function building(id) {
     const tn = u.tenantId && tOf(u.tenantId);
     const sel = selUnit === u.id ? ' sel' : '';
     return tn
-      ? `<button type="button" class="unit${sel}" data-unit="${u.id}" aria-pressed="${!!sel}"><b>${esc(u.label)}</b><span>${esc(tn.name)}</span><span class="mut" style="font-size:13px"><span class="num">${fmt(tn.rent)}</span> ر.ع.</span>${pill(tn)}</button>`
-      : `<button type="button" class="unit vacant${sel}" data-unit="${u.id}" aria-pressed="${!!sel}"><b>${esc(u.label)}</b><span class="mut">شاغرة</span><span class="mut" style="font-size:13px"><span class="num">${fmt(u.rent)}</span> ر.ع. متوقع</span></button>`;
+      ? `<button type="button" class="unit${sel}" data-unit="${u.id}" aria-pressed="${!!sel}"><img class="uimg" src="${unitArt(u)}" alt=""><b>${esc(u.label)}</b><span>${esc(tn.name)}</span><span class="mut" style="font-size:13px"><span class="num">${fmt(tn.rent)}</span> ر.ع.</span>${pill(tn)}</button>`
+      : `<button type="button" class="unit vacant${sel}" data-unit="${u.id}" aria-pressed="${!!sel}"><img class="uimg" src="${unitArt(u)}" alt=""><b>${esc(u.label)}</b><span class="mut">شاغرة</span><span class="mut" style="font-size:13px"><span class="num">${fmt(u.rent)}</span> ر.ع. متوقع</span></button>`;
   }).join('');
   const detail = '';
   return `<div class="tools"><a class="back" href="#buildings"><span class="ico" aria-hidden="true">${ICON.back}</span>كل المباني</a><div class="bars"><button class="btn" data-add-unit="${id}">إضافة وحدة</button><button class="btn soft" data-edit-building="${id}">تعديل المبنى</button><button class="btn danger" data-del-building="${id}">حذف المبنى</button></div></div>
@@ -507,7 +553,8 @@ function findReceipt(rid) { for (const t of db.tenants) { const r = (t.receipts 
 /* ---------- Marketplace ---------- */
 const MSTORE = 'sakan-market-v1';
 const AREAS = ['الخوير', 'القرم', 'بوشر', 'الموج', 'المعبيلة', 'العذيبة', 'الغبرة', 'الخوض', 'السيب', 'مطرح', 'روي', 'مدينة السلطان قابوس', 'الحيل', 'العامرات', 'الأنصب'];
-const LTYPES = ['شقة', 'استوديو', 'فيلا', 'لوفت', 'غرفة', 'محل', 'مكتب'];
+const LTYPES = ['شقة', 'استوديو', 'فيلا', 'فيلا توين', 'تاون هاوس', 'لوفت', 'غرفة', 'محل', 'مكتب'];
+const UKINDS = ['شقة', 'استوديو', 'فيلا', 'فيلا توين', 'تاون هاوس', 'لوفت', 'غرفة', 'محل', 'مكتب'];
 const FEATS = ['موقف سيارة', 'مصعد', 'مسبح', 'نادٍ رياضي', 'تكييف مركزي', 'شرفة', 'إطلالة بحر', 'حارس أمن', 'قريب من المدارس', 'يسمح بالعائلات فقط', 'للعزاب'];
 const PAL = [
   { sky1: '#9ED8F0', sky2: '#F6E9D6', wall: '#EFE3CF', wall2: '#D9C6A6', trim: '#C2A77E', win: '#4E7D93', ground: '#D8C39C', wallIn: '#EFE6D8', floor: '#C9A57A', accent: '#2F6F5E', accent2: '#E3B04B', rug: '#B4532A', leaf: '#3F7A4A' },
@@ -536,6 +583,23 @@ const ART = {
   bedroom(p) {
     return `${sky(p)}<rect width="800" height="600" fill="${p.wallIn}"/><rect y="450" width="800" height="150" fill="${p.floor}"/><rect y="444" width="800" height="8" fill="${p.trim}"/><rect x="40" y="110" width="130" height="190" rx="6" fill="url(#s)"/><path d="M40 110h130v190H40zM105 110v190" stroke="#FFFFFF" stroke-width="8" fill="none"/><rect x="330" y="120" width="140" height="90" rx="4" fill="#FFFFFF"/><circle cx="400" cy="165" r="28" fill="${p.accent2}" opacity=".8"/><rect x="220" y="240" width="360" height="160" rx="22" fill="${p.accent}"/><rect x="196" y="350" width="408" height="110" rx="18" fill="#FFFFFF"/><rect x="196" y="392" width="408" height="92" rx="16" fill="${p.accent2}"/><rect x="196" y="392" width="408" height="14" fill="#FFFFFF" opacity=".5"/><rect x="246" y="318" width="120" height="50" rx="16" fill="#F7F3EC"/><rect x="434" y="318" width="120" height="50" rx="16" fill="#F7F3EC"/><rect x="110" y="380" width="70" height="80" rx="6" fill="#8A6A4A"/><rect x="620" y="380" width="70" height="80" rx="6" fill="#8A6A4A"/><path d="M128 380h34l-8-40h-18z" fill="${p.accent2}"/><rect x="143" y="340" width="4" height="0" fill="#000"/><path d="M638 380h34l-8-40h-18z" fill="${p.accent2}"/><ellipse cx="400" cy="540" rx="230" ry="30" fill="${p.rug}" opacity=".6"/>`;
   },
+  twin(p) {
+    const half = (x, door) => {
+      let cr = ''; for (let i = 0; i < 6; i++) cr += `<rect x="${x + 6 + i * 44}" y="226" width="24" height="18" fill="${p.wall}"/>`;
+      let cr2 = ''; for (let i = 0; i < 4; i++) cr2 += `<rect x="${x + 56 + i * 44}" y="148" width="22" height="16" fill="${p.wall}"/>`;
+      const arch = (ax, ay, w, h, f) => `<path d="M${ax} ${ay + h}V${ay + w / 2}a${w / 2} ${w / 2} 0 0 1 ${w} 0V${ay + h}Z" fill="${f}"/>`;
+      return `${cr2}<rect x="${x + 50}" y="162" width="190" height="84" fill="${p.wall}"/>${cr}<rect x="${x}" y="242" width="280" height="218" fill="${p.wall}"/>${arch(x + 30, 300, 54, 100, p.win)}${arch(x + 196, 300, 54, 100, p.win)}${arch(x + 112, 322, 56, 138, door)}${arch(x + 90, 180, 38, 52, p.win)}${arch(x + 162, 180, 38, 52, p.win)}`;
+    };
+    return `${sky(p)}<rect width="800" height="600" fill="url(#s)"/><circle cx="700" cy="90" r="38" fill="#FFF3C9" opacity=".9"/>${half(120, '#6B4A2E')}${half(400, p.accent)}<rect x="396" y="150" width="8" height="310" fill="${p.trim}"/><rect x="0" y="440" width="800" height="70" fill="${p.wall2}"/><rect x="200" y="440" width="90" height="70" fill="${p.trim}"/><rect x="510" y="440" width="90" height="70" fill="${p.trim}"/><g fill="#D9468F" opacity=".85"><circle cx="40" cy="440" r="15"/><circle cx="66" cy="432" r="12"/><circle cx="760" cy="440" r="15"/><circle cx="734" cy="432" r="12"/></g><rect x="0" y="510" width="800" height="90" fill="${p.ground}"/>${palm(40, p)}`;
+  },
+  loft(p) {
+    let g = ''; for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) g += `<rect x="${430 + c * 76}" y="${40 + r * 92}" width="68" height="84" fill="url(#s)"/>`;
+    return `${sky(p)}<rect width="800" height="600" fill="${p.wallIn}"/><rect x="420" y="30" width="316" height="390" fill="#1E1E22"/>${g}<rect y="440" width="800" height="160" fill="${p.floor}"/><rect y="434" width="800" height="8" fill="#1E1E22"/><path d="M40 440L40 300L180 300L180 250L300 250" stroke="#1E1E22" stroke-width="8" fill="none"/>${[0, 1, 2, 3, 4].map((i) => `<rect x="${60 + i * 46}" y="${400 - i * 30}" width="46" height="10" fill="#1E1E22"/>`).join('')}<path d="M520 0v120M620 0v120" stroke="#1E1E22" stroke-width="3"/><path d="M498 140h44l-6-22h-32zM598 140h44l-6-22h-32z" fill="${p.accent2}"/><rect x="250" y="340" width="300" height="80" rx="24" fill="${p.accent}"/><rect x="230" y="385" width="340" height="62" rx="22" fill="${p.accent}"/><rect x="230" y="385" width="340" height="62" rx="22" fill="#000" opacity=".14"/><rect x="280" y="355" width="74" height="46" rx="14" fill="${p.accent2}"/><ellipse cx="400" cy="530" rx="240" ry="38" fill="${p.rug}" opacity=".75"/><path d="M660 520h56l-8 60h-40z" fill="#1E1E22"/><g fill="${p.leaf}"><ellipse cx="688" cy="470" rx="20" ry="50"/><ellipse cx="660" cy="492" rx="14" ry="36" transform="rotate(-30 660 492)"/><ellipse cx="716" cy="492" rx="14" ry="36" transform="rotate(30 716 492)"/></g>`;
+  },
+  office(p) {
+    let g = ''; for (let c = 0; c < 6; c++) for (let r = 0; r < 9; r++) g += `<rect x="${256 + c * 48}" y="${92 + r * 44}" width="42" height="38" fill="${p.win}" opacity="${0.55 + ((c + r) % 3) * 0.15}"/>`;
+    return `${sky(p)}<rect width="800" height="600" fill="url(#s)"/><circle cx="130" cy="110" r="42" fill="#FFF3C9" opacity=".9"/><rect x="120" y="260" width="110" height="240" fill="${p.wall2}"/><rect x="580" y="220" width="120" height="280" fill="${p.wall2}"/><rect x="240" y="76" width="320" height="424" fill="${p.wall}"/>${g}<path d="M256 92L380 92L256 300Z" fill="#FFFFFF" opacity=".18"/><rect x="230" y="64" width="340" height="14" fill="${p.trim}"/><rect x="360" y="450" width="80" height="50" fill="${p.accent}"/><rect x="0" y="500" width="800" height="100" fill="${p.ground}"/>${palm(70, p)}${palm(720, p)}`;
+  },
   shop(p) {
     return `${sky(p)}<rect width="800" height="600" fill="url(#s)"/><rect x="120" y="150" width="560" height="350" fill="${p.wall}"/><rect x="100" y="140" width="600" height="20" fill="${p.trim}"/><rect x="150" y="190" width="500" height="60" rx="6" fill="${p.accent}"/><rect x="170" y="280" width="200" height="220" fill="${p.win}" opacity=".85"/><rect x="430" y="280" width="200" height="220" fill="${p.win}" opacity=".85"/><path d="M150 250h500l-20 30H170z" fill="${p.accent2}"/><rect x="0" y="500" width="800" height="100" fill="${p.ground}"/>${palm(60, p)}`;
   }
@@ -546,11 +610,19 @@ function artURI(kind, k) {
   if (!artCache[key]) artCache[key] = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">${(ART[kind] || ART.living)(PAL[k % PAL.length])}</svg>`);
   return artCache[key];
 }
+const OUTSIDE = { 'فيلا': 'villa', 'فيلا توين': 'twin', 'تاون هاوس': 'twin', 'محل': 'shop', 'مكتب': 'office', 'لوفت': 'loft', 'استوديو': 'facade', 'غرفة': 'bedroom' };
+const outsideArt = (type) => OUTSIDE[type] || 'facade';
 function artFor(type, k) {
-  if (type === 'فيلا') return [['villa', k], ['living', k], ['bedroom', k]];
-  if (type === 'محل' || type === 'مكتب') return [['shop', k], ['living', k]];
-  return [['facade', k], ['living', k], ['bedroom', k]];
+  const a = outsideArt(type);
+  if (a === 'shop' || a === 'office') return [[a, k], ['living', k]];
+  if (a === 'loft') return [['loft', k], ['facade', k], ['bedroom', k]];
+  if (a === 'bedroom') return [['bedroom', k], ['living', k], ['facade', k]];
+  return [[a, k], ['living', k], ['bedroom', k]];
 }
+const hashK = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % PAL.length; };
+const kindOf = (u) => u.kind || (bOf(u.buildingId) || {}).kind || 'شقة';
+const unitArt = (u) => artURI(outsideArt(kindOf(u)) === 'bedroom' ? 'bedroom' : outsideArt(kindOf(u)), hashK(u.buildingId));
+const bldArt = (b) => artURI(outsideArt(b.kind) === 'loft' ? 'facade' : outsideArt(b.kind), hashK(b.id));
 const imgsOf = (l) => (l.photos && l.photos.length ? l.photos : (l.art || []).map(([a, k]) => artURI(a, k)));
 
 function seedMarket() {
@@ -568,12 +640,20 @@ function seedMarket() {
       L({ title: 'شقة غرفتين قرب المطار', type: 'شقة', area: 'العذيبة', rent: 300, beds: 2, baths: 2, size: 105, k: 3, owner: 'ليلى البوسعيدية (مثال)', date: '11 نوفمبر', views: 39, feats: ['مصعد', 'شرفة', 'موقف سيارة'], desc: 'على بعد 5 دقائق من مطار مسقط الدولي. المبنى جديد ويضم مصعدين.' }),
       L({ title: 'فيلا دوبلكس فاخرة', type: 'فيلا', area: 'مدينة السلطان قابوس', rent: 850, beds: 5, baths: 5, size: 420, k: 1, owner: 'شركة الواحة العقارية (مثال)', date: '9 نوفمبر', views: 176, feats: ['مسبح', 'تكييف مركزي', 'حارس أمن', 'قريب من المدارس'], desc: 'فيلا بمسبح خاص وحديقة واسعة في واحدة من أهدأ مناطق مسقط.' }),
       L({ title: 'شقة غرفة واحدة مفروشة', type: 'شقة', area: 'روي', rent: 190, beds: 1, baths: 1, size: 60, k: 4, owner: 'خالد الريامي (مثال)', furnished: 'yes', date: '8 نوفمبر', views: 44, feats: ['مصعد', 'للعزاب'], desc: 'في قلب روي قرب المحلات والمواصلات. مفروشة ومجهزة بالأجهزة.' }),
+      L({ title: 'فيلا توين 4 غرف قرب الشاطئ', type: 'فيلا توين', area: 'الموج', rent: 700, beds: 4, baths: 5, size: 360, k: 2, owner: 'شركة الواحة العقارية (مثال)', date: '15 نوفمبر', views: 92, feats: ['موقف سيارة', 'تكييف مركزي', 'يسمح بالعائلات فقط', 'قريب من المدارس'], desc: 'فيلا توين بجدار مشترك واحد ومدخل مستقل، مع حديقة صغيرة وسطح. خمس دقائق من شاطئ الموج.' }),
+      L({ title: 'فيلا توين جديدة 3 غرف', type: 'فيلا توين', area: 'الأنصب', rent: 450, beds: 3, baths: 4, size: 280, k: 0, owner: 'محمد الحارثي (مثال)', date: '14 نوفمبر', views: 58, feats: ['موقف سيارة', 'يسمح بالعائلات فقط'], desc: 'بناء جديد لم يُسكن من قبل، مطبخ مغلق ومجلس وغرفة خادمة.' }),
+      L({ title: 'مكتب إداري في برج تجاري', type: 'مكتب', area: 'الخوير', rent: 400, beds: 0, baths: 1, size: 75, k: 3, owner: 'عقارات النخبة (مثال)', date: '6 نوفمبر', views: 21, feats: ['مصعد', 'موقف سيارة', 'حارس أمن'], desc: 'مكتب بإطلالة على شارع السلطان قابوس، مع غرفة اجتماعات صغيرة.' }),
       L({ title: 'محل تجاري على شارع رئيسي', type: 'محل', area: 'الغبرة', rent: 520, beds: 0, baths: 1, size: 90, k: 2, owner: 'عقارات النخبة (مثال)', date: '7 نوفمبر', views: 29, feats: ['موقف سيارة'], desc: 'واجهة زجاجية على الشارع الرئيسي، مناسب لمقهى أو صالون.' })
     ]
   };
 }
 let mkt;
 try { mkt = JSON.parse(localStorage.getItem(MSTORE)) || seedMarket(); } catch (e) { mkt = seedMarket(); }
+(() => { // add newer sample ads to older saved data, and refresh drawn images
+  const fresh = seedMarket();
+  fresh.listings.forEach((f) => { if (!f.mine && !mkt.listings.some((l) => l.title === f.title)) mkt.listings.push(f); });
+  mkt.listings.forEach((l) => { if (!l.photos || !l.photos.length) l.art = artFor(l.type, (l.art && l.art[0] && l.art[0][1]) || 0); });
+})();
 function persistM() { try { localStorage.setItem(MSTORE, JSON.stringify(mkt)); return true; } catch (e) { return false; } }
 const lOf = (id) => mkt.listings.find((l) => l.id === id);
 const mf = { tab: 'browse', q: '', area: '', type: '', max: '', beds: '', furn: '', sort: 'new' };
@@ -597,7 +677,7 @@ function lcard(l, ten) {
 function mResults(ten) {
   let list = mkt.listings.filter((l) => l.status === 'active' && (mf.tab !== 'saved' || mkt.saved.includes(l.id)));
   const q = mf.q.trim().toLowerCase();
-  if (q) list = list.filter((l) => [l.title, l.area, l.type, l.desc, (l.feats || []).join(' ')].join(' ').toLowerCase().includes(q));
+  if (q) list = list.filter((l) => matchQ(l, q));
   if (mf.area) list = list.filter((l) => l.area === mf.area);
   if (mf.type) list = list.filter((l) => l.type === mf.type);
   if (mf.beds) list = list.filter((l) => Number(l.beds) >= Number(mf.beds));
@@ -621,15 +701,15 @@ function market(ten) {
   const opt = (v, label, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(label)}</option>`;
   const [n, cards] = mResults(ten);
   return head + `<section class="tile filters">
-      <label class="fld q">بحث<input type="search" data-mf="q" value="${esc(mf.q)}" placeholder="مثال: إطلالة بحر، مسبح، قرب المدارس"></label>
-      <label class="fld">المنطقة<select data-mf="area">${opt('', 'كل المناطق', mf.area)}${AREAS.map((a) => opt(a, a, mf.area)).join('')}</select></label>
-      <label class="fld">النوع<select data-mf="type">${opt('', 'كل الأنواع', mf.type)}${LTYPES.map((a) => opt(a, a, mf.type)).join('')}</select></label>
+      <div class="fld q"><label for="mq">بحث</label><div class="sbox"><input id="mq" type="search" data-mf="q" value="${esc(mf.q)}" placeholder="مثال: فيلا توين، twin، إطلالة بحر، القرم" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sugg" aria-autocomplete="list"><div class="sugg" id="sugg" role="listbox" hidden></div></div></div>
+      <div class="fld"><span>المنطقة</span>${picker('area', [['', 'كل المناطق'], ...AREAS], mf.area, { mf: 'area' })}</div>
+      <div class="fld"><span>النوع</span>${picker('type', [['', 'كل الأنواع'], ...LTYPES], mf.type, { mf: 'type' })}</div>
       <label class="fld">غرف النوم<select data-mf="beds">${opt('', 'أي عدد', mf.beds)}${[1, 2, 3, 4].map((a) => opt(a, a + ' أو أكثر', mf.beds)).join('')}</select></label>
       <label class="fld">أقصى إيجار (ر.ع.)<input type="number" min="0" step="10" inputmode="numeric" data-mf="max" value="${esc(mf.max)}" placeholder="بلا حد"></label>
       <label class="fld">الأثاث<select data-mf="furn">${opt('', 'الكل', mf.furn)}${opt('yes', 'مفروشة', mf.furn)}${opt('no', 'غير مفروشة', mf.furn)}</select></label>
       <label class="fld">الترتيب<select data-mf="sort">${opt('new', 'الأحدث', mf.sort)}${opt('cheap', 'الأقل سعرًا', mf.sort)}${opt('dear', 'الأعلى سعرًا', mf.sort)}${opt('big', 'الأكبر مساحة', mf.sort)}</select></label>
     </section>
-    <div class="mcount mut" id="mcount"><span class="num">${n}</span> إعلان</div>
+    <div class="mcount mut"><span id="mcount"><span class="num">${n}</span> إعلان</span>${mf.type || mf.area || mf.q || mf.max || mf.beds || mf.furn ? ' · <button type="button" class="clearf" data-mk-clear>مسح الفلاتر</button>' : ''}</div>
     <div class="lgrid" id="mres">${cards}</div>`;
 }
 function myListings() {
@@ -691,19 +771,18 @@ function listingForm(id, unitId) {
   const l = id ? lOf(id) : null;
   const u = !l && unitId ? unitOf(unitId) : null;
   const b = u && bOf(u.buildingId);
-  const kindMap = { 'شقة': 'شقة', 'فيلا': 'فيلا', 'لوفت': 'لوفت', 'محل': 'محل', 'مكتب': 'مكتب' };
-  const d = l || { title: u ? `${u.label} في ${b.name}` : '', type: (b && kindMap[b.kind]) || 'شقة', area: (b && AREAS.includes(b.area) && b.area) || 'الخوير', rent: u ? u.rent : '', beds: 2, baths: 2, size: '', furnished: 'no', feats: [], desc: '', phone: '', unitId: unitId || '' };
+  const d = l || { title: u ? `${u.label} في ${b.name}` : '', type: u ? kindOf(u) : 'شقة', area: (b && AREAS.includes(b.area) && b.area) || 'الخوير', rent: u ? u.rent : '', beds: 2, baths: 2, size: '', furnished: 'no', feats: [], desc: '', phone: '', unitId: unitId || '' };
   openUnitId = null;
   const sel = (name, items, cur) => `<select id="f-${name}" name="${name}">${items.map(([v, t]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   sheetSave = async (v) => {
     const files = v.$all('photos').filter((f) => f && f.size).slice(0, 5);
     const photos = [];
     for (const f of files) { const p = await readImage(f, 800, 0.62); if (p) photos.push(p); }
-    const k = Math.floor(Math.random() * PAL.length);
+    const k = u ? hashK(u.buildingId) : l ? ((l.art && l.art[0] && l.art[0][1]) || 0) : Math.floor(Math.random() * PAL.length);
     const data = { title: v.title.trim(), type: v.type, area: v.area, rent: Number(v.rent), beds: Number(v.beds), baths: Number(v.baths), size: Number(v.size) || 0, furnished: v.furnished, feats: v.$all('feats'), desc: v.desc.trim(), phone: v.phone.trim() };
     if (l) {
       Object.assign(l, data);
-      if (photos.length) l.photos = photos; else if (!l.photos.length) l.art = artFor(l.type, l.art?.[0]?.[1] ?? k);
+      if (photos.length) l.photos = photos; l.art = artFor(l.type, k);
       toast('تم حفظ الإعلان');
     } else {
       mkt.listings.unshift(Object.assign({ id: uid('l'), status: 'active', mine: true, owner: 'سالم العبري', inquiries: [], views: 0, date: today(), ts: Date.now(), unitId: v.unitId || '', photos, art: artFor(data.type, k) }, data));
@@ -714,10 +793,11 @@ function listingForm(id, unitId) {
     if (location.hash !== '#market') location.hash = '#market';
   };
   $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>${l ? 'تعديل الإعلان' : 'إعلان جديد'}</h2>
+    ${l && l.photos.length ? '' : `<figure class="apre"><img id="artPre" src="${artURI(artFor(d.type, u ? hashK(u.buildingId) : 0)[0][0], u ? hashK(u.buildingId) : 0)}" alt=""><figcaption>صورة تلقائية حسب النوع · تتغير عند اختيار نوع آخر، ويمكنك رفع صورك بدلًا منها</figcaption></figure>`}
     ${u ? `<span class="mut" style="font-size:13px">من وحدتك الشاغرة: ${esc(place(u.id))}</span><input type="hidden" name="unitId" value="${esc(u.id)}">` : ''}
     <label class="drop" for="f-photos"><span class="ph" aria-hidden="true">${LI(I_CAM)}</span><span id="photosTxt">${l && l.photos.length ? 'اختر صورًا جديدة لاستبدال الحالية' : 'أضف حتى 5 صور للوحدة'}</span><input id="f-photos" name="photos" type="file" accept="image/*" multiple></label>
     <label for="f-title">عنوان الإعلان<input id="f-title" name="title" required value="${esc(d.title)}" placeholder="مثال: شقة غرفتين قرب البحر"></label>
-    <div class="row2"><label for="f-type">النوع${sel('type', LTYPES.map((x) => [x, x]), d.type)}</label><label for="f-area">المنطقة${sel('area', AREAS.map((x) => [x, x]), d.area)}</label></div>
+    <div class="row2"><label>النوع${picker('type', LTYPES, d.type)}</label><label>المنطقة${picker('area', AREAS, d.area)}</label></div>
     <div class="row3"><label for="f-rent">الإيجار الشهري (ر.ع.)<input id="f-rent" name="rent" type="number" min="1" required value="${esc(d.rent)}"></label><label for="f-size">المساحة (م²)<input id="f-size" name="size" type="number" min="0" value="${esc(d.size || '')}"></label><label for="f-furnished">الأثاث${sel('furnished', [['no', 'غير مفروشة'], ['yes', 'مفروشة']], d.furnished)}</label></div>
     <div class="row2"><label for="f-beds">غرف النوم${sel('beds', [[0, 'استوديو'], 1, 2, 3, 4, 5, 6].map((x) => (Array.isArray(x) ? x : [x, x])), d.beds)}</label><label for="f-baths">الحمّامات${sel('baths', [1, 2, 3, 4, 5, 6].map((x) => [x, x]), d.baths)}</label></div>
     <fieldset class="prio"><legend>المميزات</legend><div class="checks">${FEATS.map((f) => `<label><input type="checkbox" name="feats" value="${esc(f)}" ${(d.feats || []).includes(f) ? 'checked' : ''}>${esc(f)}</label>`).join('')}</div></fieldset>
@@ -725,13 +805,79 @@ function listingForm(id, unitId) {
     <label for="f-phone">رقم واتساب للتواصل (اختياري)<input id="f-phone" name="phone" type="tel" placeholder="+968" value="${esc(d.phone || '')}"></label>
     <div class="acts"><button class="btn" type="submit">${l ? 'حفظ' : 'نشر الإعلان'}</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
   $('#sheet').hidden = false;
+  previewK = u ? hashK(u.buildingId) : (l && l.art && l.art[0] ? l.art[0][1] : 0);
 }
+let previewK = 0;
+document.addEventListener('input', (e) => {
+  if (e.target.name !== 'type' || !e.target.closest('#sheetForm')) return;
+  const pre = $('#artPre'); if (pre) pre.src = artURI(artFor(e.target.value, previewK)[0][0], previewK);
+});
 function refreshResults() {
   const box = $('#mres'); if (!box) return;
   const [n, cards] = mResults(document.body.classList.contains('tenant'));
   box.innerHTML = cards; $('#mcount').innerHTML = `<span class="num">${n}</span> إعلان`;
 }
-document.addEventListener('input', (e) => { const k = e.target.dataset && e.target.dataset.mf; if (!k) return; mf[k] = e.target.value; refreshResults(); });
+document.addEventListener('input', (e) => { const k = e.target.dataset && e.target.dataset.mf; if (!k) return; mf[k] = e.target.value; refreshResults(); if (k === 'q') showSugg(e.target.value); });
+
+/* ---------- Search: Arabic + English aliases and suggestions ---------- */
+const norm = (s) => String(s || '').toLowerCase().replace(/[ً-ْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim();
+const AREA_EN = { 'الخوير': 'khuwair alkhuwair al khuwair', 'القرم': 'qurum alqurum al qurum', 'بوشر': 'bausher bawshar bowsher', 'الموج': 'mouj almouj al mouj wave', 'المعبيلة': 'maabela mabela mabelah maabilah', 'العذيبة': 'azaiba athaiba azaibah', 'الغبرة': 'ghubra ghubrah alghubra', 'الخوض': 'khoudh alkhoudh al khoud khod', 'السيب': 'seeb alseeb as seeb', 'مطرح': 'muttrah mutrah matrah', 'روي': 'ruwi', 'مدينة السلطان قابوس': 'madinat sultan qaboos msq mq qaboos', 'الحيل': 'hail alhail al hail', 'العامرات': 'amerat amarat al amerat', 'الأنصب': 'ansab alansab al ansab' };
+const ALIAS = [
+  ['twin villa twin villas twin house semi detached semidetached توين تؤام توأم', 'فيلا توين'], ['townhouse town house تاون', 'تاون هاوس'], ['villa house فله فلة', 'فيلا'], ['apartment apt flat شقه', 'شقة'], ['studio ستديو', 'استوديو'],
+  ['loft', 'لوفت'], ['room bedroom', 'غرفة'], ['shop store retail', 'محل'], ['office', 'مكتب'], ['pool swimming', 'مسبح'], ['sea beach view بحر شاطئ', 'إطلالة بحر'],
+  ['gym fitness', 'نادٍ رياضي'], ['parking garage', 'موقف سيارة'], ['lift elevator', 'مصعد'], ['furnished', 'مفروشة'], ['family families عائلة', 'العائلات'], ['bachelor single عزاب', 'للعزاب'],
+  ['balcony', 'شرفة'], ['garden yard', 'حديقة'], ['school schools', 'المدارس'], ['airport', 'المطار'], ['security guard', 'حارس أمن'], ['central ac air conditioning', 'تكييف مركزي']
+];
+const aliasesOf = (tok) => { const t = norm(tok); const out = [t]; if (t.length < 2) return out; ALIAS.forEach(([keys, ar]) => { if (keys.split(' ').some((k) => norm(k).startsWith(t) || (t.length > 3 && t.startsWith(norm(k))))) out.push(norm(ar)); }); Object.entries(AREA_EN).forEach(([ar, en]) => { if (en.split(' ').some((k) => k.startsWith(t))) out.push(norm(ar)); }); return out; };
+function matchQ(l, q) {
+  const hay = norm([l.title, l.area, l.type, l.desc, l.furnished === 'yes' ? 'مفروشة' : '', (l.feats || []).join(' ')].join(' '));
+  return norm(q).split(' ').every((tok) => aliasesOf(tok).some((a) => hay.includes(a)));
+}
+function suggestions(q) {
+  const t = norm(q); if (!t) return [];
+  const act = mkt.listings.filter((l) => l.status === 'active');
+  const cnt = (f) => act.filter(f).length;
+  const hit = (label, extra = '') => { const h = norm(label + ' ' + extra); return t.split(' ').every((tok) => h.includes(tok) || aliasesOf(tok).some((a) => a !== tok && norm(label).includes(a))); };
+  const out = [];
+  LTYPES.forEach((x) => { const en = ALIAS.find(([, ar]) => ar === x)?.[0] || ''; if (hit(x, en)) out.push({ kind: 'type', v: x, label: x, tag: 'نوع', n: cnt((l) => l.type === x) }); });
+  AREAS.forEach((x) => { if (hit(x, AREA_EN[x])) out.push({ kind: 'area', v: x, label: x, tag: 'منطقة', n: cnt((l) => l.area === x) }); });
+  if (out.some((o) => o.kind === 'type')) { const ty = out.find((o) => o.kind === 'type').v; AREAS.forEach((a) => { const n = cnt((l) => l.type === ty && l.area === a); if (n) out.push({ kind: 'combo', v: ty, a, label: `${ty} في ${a}`, tag: 'اقتراح', n }); }); }
+  FEATS.forEach((x) => { const en = ALIAS.find(([, ar]) => x.includes(ar))?.[0] || ''; if (hit(x, en)) out.push({ kind: 'feat', v: x, label: x, tag: 'ميزة', n: cnt((l) => (l.feats || []).includes(x)) }); });
+  act.forEach((l) => { if (matchQ(l, q)) out.push({ kind: 'listing', v: l.id, label: l.title, tag: `${l.area} · ${fmt(l.rent)} ر.ع.`, n: -1, img: imgsOf(l)[0] }); });
+  return out.filter((o) => o.n !== 0).slice(0, 8);
+}
+let suggIdx = -1;
+function showSugg(q) {
+  const box = $('#sugg'), inp = $('#mq'); if (!box) return;
+  const list = suggestions(q); suggIdx = -1;
+  if (!list.length) { box.hidden = true; inp.setAttribute('aria-expanded', 'false'); if (norm(q)) { box.hidden = false; box.innerHTML = '<div class="snone">لا توجد اقتراحات. جرّب: فيلا، شقة، twin، القرم</div>'; } return; }
+  box.innerHTML = list.map((o, i) => `<button type="button" role="option" id="sg${i}" data-sg="${i}">${o.img ? `<img src="${esc(o.img)}" alt="">` : `<span class="sic">${o.kind === 'area' ? MI.pin : o.kind === 'feat' ? svgI('<path d="M5 12l4 4 10-10"/>', 16) : svgI('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>', 16)}</span>`}<span class="sl"><b>${esc(o.label)}</b><small>${esc(o.tag)}</small></span>${o.n > 0 ? `<span class="sn"><span class="num">${o.n}</span></span>` : ''}</button>`).join('');
+  box._list = list; box.hidden = false; inp.setAttribute('aria-expanded', 'true');
+}
+function pickSugg(i) {
+  const box = $('#sugg'); const o = box && box._list && box._list[i]; if (!o) return;
+  box.hidden = true;
+  if (o.kind === 'listing') { openListing(o.v); return; }
+  mf.q = '';
+  if (o.kind === 'type') mf.type = o.v;
+  else if (o.kind === 'area') mf.area = o.v;
+  else if (o.kind === 'combo') { mf.type = o.v; mf.area = o.a; }
+  else if (o.kind === 'feat') mf.q = o.v;
+  render(); toast('تم تطبيق: ' + o.label);
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sg]'); if (b) { pickSugg(Number(b.dataset.sg)); return; }
+  if (!e.target.closest('.sbox')) { const box = $('#sugg'); if (box) box.hidden = true; }
+});
+document.addEventListener('focusin', (e) => { if (e.target.id === 'mq' && e.target.value) showSugg(e.target.value); });
+document.addEventListener('keydown', (e) => {
+  if (e.target.id !== 'mq') return;
+  const box = $('#sugg'); if (!box || box.hidden || !box._list) { if (e.key === 'Escape') e.stopImmediatePropagation(); return; }
+  const n = box._list.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); suggIdx = (suggIdx + (e.key === 'ArrowDown' ? 1 : -1) + n) % n; box.querySelectorAll('[data-sg]').forEach((x, i) => x.classList.toggle('on', i === suggIdx)); e.target.setAttribute('aria-activedescendant', 'sg' + suggIdx); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (suggIdx >= 0) pickSugg(suggIdx); else box.hidden = true; }
+  else if (e.key === 'Escape') { e.stopImmediatePropagation(); box.hidden = true; }
+}, true);
 document.addEventListener('change', (e) => {
   if (e.target.id !== 'f-photos') return;
   const fs = [...(e.target.files || [])].slice(0, 5), box = e.target.closest('.drop'); if (!box) return;
@@ -744,6 +890,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   const d = b.dataset;
   if (d.mkTab) { mf.tab = d.mkTab; render(); }
+  else if ('mkClear' in d) { Object.assign(mf, { q: '', area: '', type: '', max: '', beds: '', furn: '' }); render(); }
   else if (d.mkOpen) openListing(d.mkOpen);
   else if ('mkNew' in d) listingForm();
   else if (d.mkUnit) { closeSheet(); listingForm(null, d.mkUnit); }
@@ -807,8 +954,8 @@ document.addEventListener('click', (e) => {
   else if ('addBuilding' in d) {
     openForm('إضافة مبنى', [
       { key: 'name', label: 'اسم المبنى', required: true },
-      { key: 'area', label: 'المنطقة', placeholder: 'مثال: العذيبة' },
-      { key: 'kind', label: 'نوع الوحدات', type: 'select', value: 'شقة', options: ['شقة', 'فيلا', 'لوفت', 'محل', 'مكتب'].map((x) => ({ value: x, label: x })) },
+      { key: 'area', label: 'المنطقة', type: 'pick', value: 'الخوير', options: AREAS.map((x) => ({ value: x, label: x })) },
+      { key: 'kind', label: 'نوع الوحدات', type: 'pick', value: 'شقة', options: UKINDS.map((x) => ({ value: x, label: x })) },
       { key: 'count', label: 'عدد الوحدات', type: 'number', value: 6, required: true },
       { key: 'rent', label: 'الإيجار المتوقع لكل وحدة (ر.ع.)', type: 'number', value: 350, required: true }
     ], (v) => {
@@ -822,16 +969,18 @@ document.addEventListener('click', (e) => {
     const bb = bOf(d.addUnit), n = db.units.filter((u) => u.buildingId === bb.id).length + 1;
     openForm('إضافة وحدة إلى ' + bb.name, [
       { key: 'label', label: 'اسم الوحدة', value: `${bb.kind} ${n}`, required: true },
+      { key: 'kind', label: 'نوع الوحدة', type: 'pick', value: bb.kind, options: UKINDS.map((x) => ({ value: x, label: x })) },
       { key: 'rent', label: 'الإيجار المتوقع (ر.ع.)', type: 'number', value: 350, required: true }
-    ], (v) => { const id = uid(bb.id + '-u'); db.units.push({ id, buildingId: bb.id, label: v.label.trim(), rent: Number(v.rent), tenantId: null }); selUnit = id; toast('تمت إضافة ' + v.label); });
+    ], (v) => { const id = uid(bb.id + '-u'); db.units.push({ id, buildingId: bb.id, kind: v.kind, label: v.label.trim(), rent: Number(v.rent), tenantId: null }); selUnit = id; toast('تمت إضافة ' + v.label + ' · الصورة حسب النوع: ' + v.kind); });
     return;
   }
   else if (d.editUnit) {
     const u = unitOf(d.editUnit);
     openForm('تعديل الوحدة', [
       { key: 'label', label: 'اسم الوحدة', value: u.label, required: true },
+      { key: 'kind', label: 'نوع الوحدة', type: 'pick', value: kindOf(u), options: UKINDS.map((x) => ({ value: x, label: x })) },
       { key: 'rent', label: 'الإيجار المتوقع (ر.ع.)', type: 'number', value: u.rent, required: true }
-    ], (v) => { u.label = v.label.trim(); u.rent = Number(v.rent); toast('تم الحفظ'); });
+    ], (v) => { u.label = v.label.trim(); u.kind = v.kind; u.rent = Number(v.rent); toast('تم الحفظ'); });
     return;
   }
   else if (d.delUnit) {
@@ -843,8 +992,9 @@ document.addEventListener('click', (e) => {
     const bb = bOf(d.editBuilding);
     openForm('تعديل المبنى', [
       { key: 'name', label: 'اسم المبنى', value: bb.name, required: true },
-      { key: 'area', label: 'المنطقة', value: bb.area }
-    ], (v) => { bb.name = v.name.trim(); bb.area = v.area.trim(); toast('تم الحفظ'); });
+      { key: 'area', label: 'المنطقة', type: 'pick', value: bb.area, options: (AREAS.includes(bb.area) ? AREAS : [bb.area, ...AREAS]).map((x) => ({ value: x, label: x })) },
+      { key: 'kind', label: 'نوع الوحدات', type: 'pick', value: bb.kind, options: UKINDS.map((x) => ({ value: x, label: x })) }
+    ], (v) => { bb.name = v.name.trim(); bb.area = v.area.trim(); bb.kind = v.kind; toast('تم الحفظ'); });
     return;
   }
   else if (d.delBuilding) {
