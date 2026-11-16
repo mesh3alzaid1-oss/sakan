@@ -72,6 +72,8 @@ let db;
 try { db = JSON.parse(localStorage.getItem(STORE)) || seed(); } catch (e) { db = seed(); }
 function persist() { try { localStorage.setItem(STORE, JSON.stringify(db)); return true; } catch (e) { return false; } }
 function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+let alertAt = 90;
+try { alertAt = Number(localStorage.getItem('sakan-alert')) || 90; } catch (e) {}
 
 let rentFilter = 'all';
 let selUnit = null;
@@ -127,7 +129,7 @@ function openUnit(id) {
        <div class="bars">${tn.status !== 'paid' ? `<button class="btn" data-pay="${tn.id}">تم الدفع</button><button class="btn soft" data-remind="${tn.id}">تذكير</button>` : ''}<button class="btn soft" data-edit="${tn.id}">تعديل البيانات</button><button class="btn danger" data-del="${tn.id}">إخلاء الوحدة</button><button class="btn soft" data-close>إغلاق</button></div>`
     : `<div><span class="mut">${esc(b.name)}</span><h2 style="font-size:22px">${esc(u.label)} · شاغرة</h2></div>
        <div class="kvs">${info('الإيجار المتوقع', `<span class="num">${fmt(u.rent)}</span> ر.ع.`)}${info('الحالة', 'جاهزة للتأجير')}</div>
-       <div class="bars"><button class="btn" data-add-tenant="${u.id}">إضافة مستأجر</button><button class="btn soft" data-edit-unit="${u.id}">تعديل الوحدة</button><button class="btn danger" data-del-unit="${u.id}">حذف الوحدة</button><button class="btn soft" data-close>إغلاق</button></div>`;
+       <div class="bars"><button class="btn" data-add-tenant="${u.id}">إضافة مستأجر</button>${(() => { const l = mkt.listings.find((x) => x.unitId === u.id && x.status !== 'rented'); return l ? `<button class="btn soft" data-mk-open="${l.id}">عرض إعلانها في السوق</button>` : `<button class="btn soft" data-mk-unit="${u.id}">انشر في السوق</button>`; })()}<button class="btn soft" data-edit-unit="${u.id}">تعديل الوحدة</button><button class="btn danger" data-del-unit="${u.id}">حذف الوحدة</button><button class="btn soft" data-close>إغلاق</button></div>`;
   $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="${esc(u.label)}">${body}</div>`;
   $('#sheet').hidden = false;
 }
@@ -157,6 +159,7 @@ function addTenant(unitId) {
   ], (v) => {
     const t = { id: uid('t'), unitId: v.unitId, name: v.name.trim(), phone: v.phone.trim(), rent: Number(v.rent), due: v.due, status: 'due', note: 'مستحق', receipts: [] };
     db.tenants.push(t); unitOf(v.unitId).tenantId = t.id; toast('تمت إضافة ' + t.name);
+    mkt.listings.forEach((l) => { if (l.unitId === v.unitId && l.status !== 'rented') l.status = 'rented'; }); persistM();
   });
 }
 function editTenant(id) {
@@ -203,8 +206,8 @@ function overview() {
       <h1>مساء الخير يا سالم</h1>
       <span class="mut">${t.unpaid.length} مستأجرين لم يدفعوا بعد، و${open.length} طلبات صيانة مفتوحة.</span>
     </section>
-    <section class="tile c hero s2 r2">
-      <span class="lbl">الإيجار المحصّل · نوفمبر</span>
+    <section class="tile c hero s2 r2${t.pct < alertAt ? ' alert' : ''}">
+      <span class="lbl">الإيجار المحصّل · نوفمبر${t.pct < alertAt ? ` <span class="flag">التحصيل منخفض · أقل من ${alertAt}%</span>` : ''}</span>
       <div><div class="big">${t.pct}%</div><div style="font-size:20px;font-weight:600"><span class="num">${fmt(t.collected)}</span> من <span class="num">${fmt(t.expected)}</span> ر.ع.</div></div>
       <div class="blocks" aria-hidden="true">${blocks}</div>
     </section>
@@ -308,6 +311,8 @@ function prefs() {
     <div class="choice">${opt('vivid', 'ملوّن', 'مربعات زجاجية بألوان زاهية وقائمة جانبية.', ['#C6F36B', '#2DD4BF', '#60A5FA'])}${opt('omani', 'عُماني', 'ألوان الرمل والأخضر والطيني وقائمة علوية.', ['#34503F', '#B4532A', '#CDBE9E'])}</div></section>
   <section class="tile" style="margin-bottom:16px"><h2>المظهر</h2>
     <div class="seg" style="max-width:260px"><button type="button" data-set-theme="light" class="${th === 'light' ? 'on' : ''}">فاتح</button><button type="button" data-set-theme="dark" class="${th === 'dark' ? 'on' : ''}">داكن</button></div></section>
+  <section class="tile" style="margin-bottom:16px"><h2>تنبيه التحصيل</h2><p class="mut" style="margin:0">يتحوّل مربع «الإيجار المحصّل» في النظرة العامة إلى الأحمر عندما تقل نسبة التحصيل عن:</p>
+    <div class="seg" style="max-width:340px">${[70, 80, 90, 95].map((n) => `<button type="button" data-set-alert="${n}" class="${alertAt === n ? 'on' : ''}"><span class="num">${n}</span>%</button>`).join('')}</div></section>
   <section class="tile" style="margin-bottom:16px"><h2>بوابة المستأجر</h2><p class="mut" style="margin:0">شاهد التطبيق كما يراه المستأجر: الدفع، رفع الإيصال، وطلبات الصيانة مع الصور. كل ما يرسله يظهر عندك هنا.</p><a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-home">فتح بوابة المستأجر</a></section>
   <section class="tile" style="margin-bottom:16px"><h2>البيانات</h2><p class="mut" style="margin:0">تُحفظ تغييراتك في هذا المتصفح فقط.</p><button class="btn danger" style="align-self:flex-start" data-reset>إعادة البيانات التجريبية</button></section>
   <section class="tile about"><span class="logo"><svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand" style="padding:0">سكن</span></span><b style="font-size:18px">كل عقاراتك في مكان واحد</b><p style="margin:0;max-width:60ch">سكن يجمع مبانيك ووحداتك ومستأجريك في شاشة واحدة: من دفع ومن لم يدفع، الوحدات الشاغرة، وطلبات الصيانة. ويمكن ربطه بلينا، المساعدة الصوتية من CUE، لتسجيل طلبات المستأجرين من الهاتف.</p><span class="mut" style="font-size:13px">من تطوير CUE · فريق من مسقط يصمم المواقع والتطبيقات ووكلاء الذكاء الاصطناعي للشركات.</span><span class="mut" style="font-size:12px">نسخة تجريبية · كل الأسماء والمبالغ أمثلة.</span></section>`;
@@ -325,16 +330,16 @@ function receiptsOf(t) {
   return t.receipts;
 }
 const reviewReceipt = (t) => receiptsOf(t).find((r) => r.month === CUR && r.status === 'review');
-function readImage(file) {
+function readImage(file, max = 900, q = 0.7) {
   return new Promise((res) => {
     if (!file || !file.size || !/^image\//.test(file.type)) return res(null);
     const r = new FileReader();
     r.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const k = Math.min(1, 900 / Math.max(img.width, img.height));
+        const k = Math.min(1, max / Math.max(img.width, img.height));
         const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.7));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q));
       };
       img.onerror = () => res(null); img.src = r.result;
     };
@@ -384,8 +389,8 @@ function tHome() {
   const cta = st === 'paid' ? `<a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-receipts">عرض الإيصال</a>` : st === 'receipt' ? '' : `<a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-pay">ادفع الآن</a>`;
   return `<div class="tools"><div><span class="mut">${esc(place(t.unitId))}</span><h1>مرحبًا ${esc(t.name.split(' ')[0])}</h1></div>${whoSel()}</div>
   <div class="grid">
-    <section class="tile c ${st === 'paid' ? 'hero' : 't2'} s2 r2">
-      <span class="lbl">إيجار ${CUR}</span>
+    <section class="tile c ${st === 'paid' ? 'hero' : st === 'receipt' ? 't3' : 't2 alert'} s2 r2">
+      <span class="lbl">إيجار ${CUR}${st === 'due' || st === 'late' ? ` <span class="flag">${st === 'late' ? 'متأخر' : 'لم يُدفع بعد'}</span>` : ''}</span>
       <div><div class="big" style="font-size:clamp(64px,8vw,112px)"><span class="num">${fmt(t.rent)}</span></div><div style="font-size:20px;font-weight:600">ريال عُماني</div></div>
       <span style="font-weight:600">${msg}</span>${cta}
     </section>
@@ -499,11 +504,265 @@ function cardPay() {
 }
 function findReceipt(rid) { for (const t of db.tenants) { const r = (t.receipts || []).find((x) => x.id === rid); if (r) return [t, r]; } return []; }
 
+/* ---------- Marketplace ---------- */
+const MSTORE = 'sakan-market-v1';
+const AREAS = ['الخوير', 'القرم', 'بوشر', 'الموج', 'المعبيلة', 'العذيبة', 'الغبرة', 'الخوض', 'السيب', 'مطرح', 'روي', 'مدينة السلطان قابوس', 'الحيل', 'العامرات', 'الأنصب'];
+const LTYPES = ['شقة', 'استوديو', 'فيلا', 'لوفت', 'غرفة', 'محل', 'مكتب'];
+const FEATS = ['موقف سيارة', 'مصعد', 'مسبح', 'نادٍ رياضي', 'تكييف مركزي', 'شرفة', 'إطلالة بحر', 'حارس أمن', 'قريب من المدارس', 'يسمح بالعائلات فقط', 'للعزاب'];
+const PAL = [
+  { sky1: '#9ED8F0', sky2: '#F6E9D6', wall: '#EFE3CF', wall2: '#D9C6A6', trim: '#C2A77E', win: '#4E7D93', ground: '#D8C39C', wallIn: '#EFE6D8', floor: '#C9A57A', accent: '#2F6F5E', accent2: '#E3B04B', rug: '#B4532A', leaf: '#3F7A4A' },
+  { sky1: '#F7C6A3', sky2: '#FCEBD9', wall: '#F6F1E8', wall2: '#E2D3BC', trim: '#B98E5E', win: '#33566B', ground: '#E4CFA8', wallIn: '#E8EEF0', floor: '#B88B62', accent: '#2C4A6B', accent2: '#C6F36B', rug: '#D9C6A6', leaf: '#4C8A54' },
+  { sky1: '#B9E3E8', sky2: '#F3EEE2', wall: '#E9D7BD', wall2: '#CDB28C', trim: '#A9805A', win: '#5C6F7A', ground: '#D2B98F', wallIn: '#F3E7DA', floor: '#A9774F', accent: '#B4532A', accent2: '#2DD4BF', rug: '#34503F', leaf: '#356B44' },
+  { sky1: '#A7C7F2', sky2: '#EEF3F6', wall: '#FFFFFF', wall2: '#DDE3E6', trim: '#8FA3AD', win: '#2D4B5E', ground: '#D9CBB0', wallIn: '#EDE9E3', floor: '#8C6A4F', accent: '#5B5F97', accent2: '#F2B8A0', rug: '#E9D7BD', leaf: '#4F8F5B' },
+  { sky1: '#FAD6A5', sky2: '#FFF4E4', wall: '#E7C9A1', wall2: '#C9A274', trim: '#8E6A45', win: '#3F5A55', ground: '#D9B98A', wallIn: '#F5EDE1', floor: '#C08F5E', accent: '#6B8E5A', accent2: '#B4532A', rug: '#F0D2A8', leaf: '#3E7346' }
+];
+const sky = (p) => `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.sky1}"/><stop offset="1" stop-color="${p.sky2}"/></linearGradient></defs>`;
+const palm = (x, p) => `<path d="M${x} 500C${x + 8} 420 ${x + 2} 360 ${x + 10} 300" stroke="#7A5A3A" stroke-width="10" fill="none" stroke-linecap="round"/><g fill="${p.leaf}" transform="translate(${x + 10} 300)"><path d="M0 0Q-50-30-90 0Q-40-15 0 0Z"/><path d="M0 0Q50-35 90-5Q40-15 0 0Z"/><path d="M0 0Q-20-55-60-65Q-15-35 0 0Z"/><path d="M0 0Q25-55 70-60Q20-35 0 0Z"/><path d="M0 0Q0-50 5-75Q8-40 0 0Z"/></g>`;
+const ART = {
+  facade(p) {
+    let w = '';
+    for (let r = 0; r < 6; r++) { for (let c = 0; c < 5; c++) w += `<rect x="${250 + c * 64}" y="${168 + r * 52}" width="40" height="30" rx="3" fill="${p.win}" opacity=".9"/>`; w += `<rect x="236" y="${202 + r * 52}" width="328" height="5" fill="${p.trim}"/>`; }
+    return `${sky(p)}<rect width="800" height="600" fill="url(#s)"/><circle cx="660" cy="110" r="46" fill="#FFF3C9" opacity=".9"/><rect x="150" y="260" width="80" height="240" fill="${p.wall2}"/><rect x="570" y="300" width="100" height="200" fill="${p.wall2}"/><rect x="220" y="140" width="360" height="360" fill="${p.wall}"/><rect x="210" y="128" width="380" height="16" fill="${p.trim}"/>${w}<rect x="370" y="440" width="60" height="60" fill="${p.accent}"/><rect x="0" y="500" width="800" height="100" fill="${p.ground}"/>${palm(90, p)}${palm(690, p)}`;
+  },
+  villa(p) {
+    let cr = ''; for (let i = 0; i < 12; i++) cr += `<rect x="${172 + i * 39}" y="214" width="22" height="18" fill="${p.wall}"/>`;
+    let cr2 = ''; for (let i = 0; i < 8; i++) cr2 += `<rect x="${252 + i * 38}" y="134" width="20" height="18" fill="${p.wall}"/>`;
+    const arch = (x, y, w, h, f) => `<path d="M${x} ${y + h}V${y + w / 2}a${w / 2} ${w / 2} 0 0 1 ${w} 0V${y + h}Z" fill="${f}"/>`;
+    return `${sky(p)}<rect width="800" height="600" fill="url(#s)"/><circle cx="130" cy="100" r="40" fill="#FFF3C9" opacity=".9"/>${cr2}<rect x="250" y="150" width="300" height="90" fill="${p.wall}"/>${cr}<rect x="170" y="230" width="460" height="230" fill="${p.wall}"/>${arch(210, 290, 60, 110, p.win)}${arch(300, 290, 60, 110, p.win)}${arch(440, 290, 60, 110, p.win)}${arch(530, 290, 60, 110, p.win)}${arch(370, 320, 60, 140, '#6B4A2E')}${arch(300, 170, 40, 55, p.win)}${arch(460, 170, 40, 55, p.win)}<rect x="0" y="440" width="800" height="70" fill="${p.wall2}"/><rect x="340" y="440" width="120" height="70" fill="${p.trim}"/><g fill="#D9468F" opacity=".85"><circle cx="60" cy="440" r="16"/><circle cx="85" cy="430" r="13"/><circle cx="110" cy="442" r="15"/><circle cx="700" cy="438" r="15"/><circle cx="725" cy="430" r="12"/><circle cx="745" cy="444" r="14"/></g><rect x="0" y="510" width="800" height="90" fill="${p.ground}"/>${palm(640, p)}`;
+  },
+  living(p) {
+    return `${sky(p)}<rect width="800" height="600" fill="${p.wallIn}"/><rect y="430" width="800" height="170" fill="${p.floor}"/><rect y="424" width="800" height="8" fill="${p.trim}"/><rect x="470" y="90" width="250" height="230" rx="6" fill="url(#s)"/><path d="M470 90h250v230H470zM595 90v230M470 205h250" stroke="#FFFFFF" stroke-width="10" fill="none"/><rect x="448" y="78" width="30" height="280" rx="8" fill="${p.accent2}" opacity=".85"/><rect x="712" y="78" width="30" height="280" rx="8" fill="${p.accent2}" opacity=".85"/><rect x="170" y="140" width="150" height="100" rx="4" fill="#FFFFFF"/><path d="M182 228l40-50 30 34 22-22 34 38z" fill="${p.accent}" opacity=".7"/><circle cx="290" cy="164" r="10" fill="${p.accent2}"/><ellipse cx="290" cy="525" rx="250" ry="42" fill="${p.rug}" opacity=".8"/><rect x="90" y="300" width="330" height="90" rx="28" fill="${p.accent}"/><rect x="66" y="355" width="378" height="72" rx="24" fill="${p.accent}"/><rect x="66" y="355" width="378" height="72" rx="24" fill="#000" opacity=".12"/><rect x="118" y="318" width="84" height="54" rx="16" fill="${p.accent2}"/><rect x="300" y="318" width="84" height="54" rx="16" fill="#FFFFFF" opacity=".85"/><rect x="90" y="425" width="10" height="22" fill="#4A3524"/><rect x="410" y="425" width="10" height="22" fill="#4A3524"/><rect x="200" y="470" width="180" height="16" rx="8" fill="#5E4330"/><rect x="215" y="486" width="8" height="40" fill="#5E4330"/><rect x="357" y="486" width="8" height="40" fill="#5E4330"/><path d="M600 520h64l-9 62h-46z" fill="#B4532A"/><g fill="${p.leaf}"><ellipse cx="632" cy="470" rx="22" ry="52"/><ellipse cx="600" cy="490" rx="16" ry="40" transform="rotate(-30 600 490)"/><ellipse cx="664" cy="490" rx="16" ry="40" transform="rotate(30 664 490)"/></g>`;
+  },
+  bedroom(p) {
+    return `${sky(p)}<rect width="800" height="600" fill="${p.wallIn}"/><rect y="450" width="800" height="150" fill="${p.floor}"/><rect y="444" width="800" height="8" fill="${p.trim}"/><rect x="40" y="110" width="130" height="190" rx="6" fill="url(#s)"/><path d="M40 110h130v190H40zM105 110v190" stroke="#FFFFFF" stroke-width="8" fill="none"/><rect x="330" y="120" width="140" height="90" rx="4" fill="#FFFFFF"/><circle cx="400" cy="165" r="28" fill="${p.accent2}" opacity=".8"/><rect x="220" y="240" width="360" height="160" rx="22" fill="${p.accent}"/><rect x="196" y="350" width="408" height="110" rx="18" fill="#FFFFFF"/><rect x="196" y="392" width="408" height="92" rx="16" fill="${p.accent2}"/><rect x="196" y="392" width="408" height="14" fill="#FFFFFF" opacity=".5"/><rect x="246" y="318" width="120" height="50" rx="16" fill="#F7F3EC"/><rect x="434" y="318" width="120" height="50" rx="16" fill="#F7F3EC"/><rect x="110" y="380" width="70" height="80" rx="6" fill="#8A6A4A"/><rect x="620" y="380" width="70" height="80" rx="6" fill="#8A6A4A"/><path d="M128 380h34l-8-40h-18z" fill="${p.accent2}"/><rect x="143" y="340" width="4" height="0" fill="#000"/><path d="M638 380h34l-8-40h-18z" fill="${p.accent2}"/><ellipse cx="400" cy="540" rx="230" ry="30" fill="${p.rug}" opacity=".6"/>`;
+  },
+  shop(p) {
+    return `${sky(p)}<rect width="800" height="600" fill="url(#s)"/><rect x="120" y="150" width="560" height="350" fill="${p.wall}"/><rect x="100" y="140" width="600" height="20" fill="${p.trim}"/><rect x="150" y="190" width="500" height="60" rx="6" fill="${p.accent}"/><rect x="170" y="280" width="200" height="220" fill="${p.win}" opacity=".85"/><rect x="430" y="280" width="200" height="220" fill="${p.win}" opacity=".85"/><path d="M150 250h500l-20 30H170z" fill="${p.accent2}"/><rect x="0" y="500" width="800" height="100" fill="${p.ground}"/>${palm(60, p)}`;
+  }
+};
+const artCache = {};
+function artURI(kind, k) {
+  const key = kind + k;
+  if (!artCache[key]) artCache[key] = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">${(ART[kind] || ART.living)(PAL[k % PAL.length])}</svg>`);
+  return artCache[key];
+}
+function artFor(type, k) {
+  if (type === 'فيلا') return [['villa', k], ['living', k], ['bedroom', k]];
+  if (type === 'محل' || type === 'مكتب') return [['shop', k], ['living', k]];
+  return [['facade', k], ['living', k], ['bedroom', k]];
+}
+const imgsOf = (l) => (l.photos && l.photos.length ? l.photos : (l.art || []).map(([a, k]) => artURI(a, k)));
+
+function seedMarket() {
+  let n = 0;
+  const L = (o) => Object.assign({ id: 'l' + (++n), status: 'active', photos: [], inquiries: [], views: 0, feats: [], mine: false, owner: 'سالم العبري', phone: '', furnished: 'no', baths: 1 }, o, { art: artFor(o.type, o.k || 0) });
+  const q = (name, msg, when, date, seen = false) => ({ id: uid('q'), name, phone: '', msg, when, date, seen, demo: true });
+  return {
+    saved: [],
+    listings: [
+      L({ title: 'شقة غرفتين بإطلالة على البحر', type: 'شقة', area: 'القرم', rent: 390, beds: 2, baths: 2, size: 110, k: 1, mine: true, unitId: 'b2-11', date: '14 نوفمبر', views: 128, feats: ['إطلالة بحر', 'موقف سيارة', 'مصعد', 'شرفة'], desc: 'شقة مشمسة في الطابق السابع من سكن القرم، قريبة من حديقة القرم الطبيعية وشاطئ القرم. مطبخ مفتوح وغرفتا نوم مع خزائن. العقد سنوي والدفع شهريًا عبر تطبيق سكن.', inquiries: [q('عبدالله الشكيلي', 'مرحبًا، هل يمكن المعاينة يوم الخميس؟ عائلة من 4 أشخاص.', 'مساءً', '15 نوفمبر'), q('سارة توماس', 'Is the flat still available from 1 December?', 'صباحًا', '13 نوفمبر', true)] }),
+      L({ title: 'لوفت حديث قرب الموج مارينا', type: 'لوفت', area: 'الموج', rent: 460, beds: 1, baths: 1, size: 85, k: 3, mine: true, unitId: 'b4-9', furnished: 'yes', date: '12 نوفمبر', views: 87, feats: ['مسبح', 'نادٍ رياضي', 'حارس أمن', 'موقف سيارة'], desc: 'لوفت بسقف عالٍ ونوافذ كبيرة، مفروش بالكامل. خطوات من المارينا والمطاعم. مناسب لشخص أو زوجين.', inquiries: [q('راهول ميهتا', 'هل الإيجار يشمل الكهرباء والماء؟', 'عطلة نهاية الأسبوع', '14 نوفمبر')] }),
+      L({ title: 'فيلا 4 غرف مع حديقة', type: 'فيلا', area: 'بوشر', rent: 620, beds: 4, baths: 4, size: 320, k: 4, mine: true, unitId: 'b3-8', date: '10 نوفمبر', views: 203, feats: ['موقف سيارة', 'قريب من المدارس', 'يسمح بالعائلات فقط', 'تكييف مركزي'], desc: 'فيلا مستقلة بطابقين في حي هادئ ببوشر، مع حديقة أمامية ومجلس منفصل للرجال. قريبة من المدارس الخاصة ومسقط جراند مول.' }),
+      L({ title: 'استوديو مفروش للموظفين', type: 'استوديو', area: 'المعبيلة', rent: 160, beds: 0, baths: 1, size: 45, k: 0, owner: 'عقارات النخبة (مثال)', furnished: 'yes', date: '15 نوفمبر', views: 64, feats: ['للعزاب', 'موقف سيارة'], desc: 'استوديو جديد مفروش مع مطبخ صغير، الإنترنت مشمول. قريب من طريق الباطنة السريع.' }),
+      L({ title: 'شقة عائلية 3 غرف', type: 'شقة', area: 'الخوض', rent: 280, beds: 3, baths: 2, size: 140, k: 2, owner: 'محمد الحارثي (مثال)', date: '13 نوفمبر', views: 51, feats: ['قريب من المدارس', 'يسمح بالعائلات فقط', 'موقف سيارة'], desc: 'شقة واسعة قريبة من جامعة السلطان قابوس، مع غرفة خادمة ومخزن.' }),
+      L({ title: 'شقة غرفتين قرب المطار', type: 'شقة', area: 'العذيبة', rent: 300, beds: 2, baths: 2, size: 105, k: 3, owner: 'ليلى البوسعيدية (مثال)', date: '11 نوفمبر', views: 39, feats: ['مصعد', 'شرفة', 'موقف سيارة'], desc: 'على بعد 5 دقائق من مطار مسقط الدولي. المبنى جديد ويضم مصعدين.' }),
+      L({ title: 'فيلا دوبلكس فاخرة', type: 'فيلا', area: 'مدينة السلطان قابوس', rent: 850, beds: 5, baths: 5, size: 420, k: 1, owner: 'شركة الواحة العقارية (مثال)', date: '9 نوفمبر', views: 176, feats: ['مسبح', 'تكييف مركزي', 'حارس أمن', 'قريب من المدارس'], desc: 'فيلا بمسبح خاص وحديقة واسعة في واحدة من أهدأ مناطق مسقط.' }),
+      L({ title: 'شقة غرفة واحدة مفروشة', type: 'شقة', area: 'روي', rent: 190, beds: 1, baths: 1, size: 60, k: 4, owner: 'خالد الريامي (مثال)', furnished: 'yes', date: '8 نوفمبر', views: 44, feats: ['مصعد', 'للعزاب'], desc: 'في قلب روي قرب المحلات والمواصلات. مفروشة ومجهزة بالأجهزة.' }),
+      L({ title: 'محل تجاري على شارع رئيسي', type: 'محل', area: 'الغبرة', rent: 520, beds: 0, baths: 1, size: 90, k: 2, owner: 'عقارات النخبة (مثال)', date: '7 نوفمبر', views: 29, feats: ['موقف سيارة'], desc: 'واجهة زجاجية على الشارع الرئيسي، مناسب لمقهى أو صالون.' })
+    ]
+  };
+}
+let mkt;
+try { mkt = JSON.parse(localStorage.getItem(MSTORE)) || seedMarket(); } catch (e) { mkt = seedMarket(); }
+function persistM() { try { localStorage.setItem(MSTORE, JSON.stringify(mkt)); return true; } catch (e) { return false; } }
+const lOf = (id) => mkt.listings.find((l) => l.id === id);
+const mf = { tab: 'browse', q: '', area: '', type: '', max: '', beds: '', furn: '', sort: 'new' };
+const MI = {
+  bed: svgI('<path d="M3 18V8M3 14h18v4M21 18v-4a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="11.5" r="1.5"/>', 16),
+  bath: svgI('<path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M6 12V6a2 2 0 0 1 4 0"/><path d="M7 19l-1 2M17 19l1 2"/>', 16),
+  size: svgI('<path d="M4 9V4h5M20 15v5h-5M4 4l7 7M20 20l-7-7"/>', 16),
+  pin: svgI('<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>', 16),
+  heart: svgI('<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>', 20)
+};
+const specs = (l) => `<span class="specs">${l.type === 'محل' || l.type === 'مكتب' ? '' : `<span>${MI.bed}${Number(l.beds) ? `<span class="num">${l.beds}</span> غرف` : 'استوديو'}</span>`}<span>${MI.bath}<span class="num">${l.baths}</span> حمّام</span>${l.size ? `<span>${MI.size}<span class="num">${l.size}</span> م²</span>` : ''}</span>`;
+const LSTATUS = { active: ['ok', 'منشور'], paused: ['due', 'متوقف مؤقتًا'], rented: ['new', 'تم التأجير'] };
+const waLink = (p) => { let d = String(p || '').replace(/\D/g, ''); if (!d) return ''; if (d.length === 8) d = '968' + d; return 'https://wa.me/' + d; };
+
+function lcard(l, ten) {
+  const fav = mkt.saved.includes(l.id);
+  return `<article class="lcard"><button type="button" class="lopen" data-mk-open="${l.id}"><span class="lph"><img src="${esc(imgsOf(l)[0] || '')}" alt="" loading="lazy"><span class="lprice"><span class="num">${fmt(l.rent)}</span> ر.ع. <small>/ شهر</small></span>${l.mine && !ten ? '<span class="ltag">إعلانك</span>' : ''}</span>
+    <span class="lbd"><b>${esc(l.title)}</b><span class="mut" style="font-size:13px;display:inline-flex;gap:4px;align-items:center">${MI.pin}${esc(l.area)} · ${esc(l.type)}${l.furnished === 'yes' ? ' · مفروشة' : ''}</span>${specs(l)}</span></button>
+    ${ten || !l.mine ? `<button type="button" class="lfav ${fav ? 'on' : ''}" data-mk-fav="${l.id}" aria-pressed="${fav}" aria-label="${fav ? 'إزالة من المحفوظة' : 'حفظ الإعلان'}">${MI.heart}</button>` : ''}</article>`;
+}
+function mResults(ten) {
+  let list = mkt.listings.filter((l) => l.status === 'active' && (mf.tab !== 'saved' || mkt.saved.includes(l.id)));
+  const q = mf.q.trim().toLowerCase();
+  if (q) list = list.filter((l) => [l.title, l.area, l.type, l.desc, (l.feats || []).join(' ')].join(' ').toLowerCase().includes(q));
+  if (mf.area) list = list.filter((l) => l.area === mf.area);
+  if (mf.type) list = list.filter((l) => l.type === mf.type);
+  if (mf.beds) list = list.filter((l) => Number(l.beds) >= Number(mf.beds));
+  if (mf.max) list = list.filter((l) => Number(l.rent) <= Number(mf.max));
+  if (mf.furn) list = list.filter((l) => l.furnished === mf.furn);
+  const by = { new: (a, b) => (b.ts || 0) - (a.ts || 0) || mkt.listings.indexOf(a) - mkt.listings.indexOf(b), cheap: (a, b) => a.rent - b.rent, dear: (a, b) => b.rent - a.rent, big: (a, b) => (b.size || 0) - (a.size || 0) };
+  list.sort(by[mf.sort] || by.new);
+  const empty = mf.tab === 'saved' ? 'لم تحفظ أي إعلان بعد. اضغط على القلب في أي إعلان لحفظه.' : 'لا توجد إعلانات بهذه الشروط. جرّب توسيع البحث.';
+  return [list.length, list.map((l) => lcard(l, ten)).join('') || `<section class="tile empty" style="grid-column:1/-1">${empty}</section>`];
+}
+function market(ten) {
+  if (ten && mf.tab === 'mine') mf.tab = 'browse';
+  if (!ten && mf.tab === 'saved') mf.tab = 'browse';
+  const active = mkt.listings.filter((l) => l.status === 'active');
+  const mine = mkt.listings.filter((l) => l.mine);
+  const fresh = mine.reduce((a, l) => a + l.inquiries.filter((x) => !x.seen).length, 0);
+  const tabs = ten ? [['browse', 'تصفّح', active.length], ['saved', 'المحفوظة', mkt.saved.filter((id) => lOf(id)?.status === 'active').length]] : [['browse', 'كل الإعلانات', active.length], ['mine', 'إعلاناتي', mine.length, fresh]];
+  const head = `<div class="tools"><div><h1>${ten ? 'ابحث عن سكن' : 'سوق سكن'}</h1><span class="mut">${ten ? 'شقق وفلل للإيجار في مسقط، من الملّاك مباشرة.' : 'اعرض وحداتك الشاغرة، واستقبل طلبات المعاينة هنا.'}</span></div>${ten ? '' : `<button class="act main" data-mk-new><span class="ico" aria-hidden="true">${svgI('<path d="M12 5v14M5 12h14"/>')}</span><span><b>أضف إعلان</b><small>صور ووصف وسعر</small></span></button>`}</div>
+    <div class="tabs mtabs" role="tablist">${tabs.map(([k, n, c, f]) => `<button type="button" role="tab" data-mk-tab="${k}" class="${mf.tab === k ? 'on' : ''}" aria-selected="${mf.tab === k}">${n}<span class="num">${c}</span>${f ? ` <span class="pill new" style="margin-inline-start:6px">${f} طلب جديد</span>` : ''}</button>`).join('')}</div>`;
+  if (mf.tab === 'mine') return head + myListings();
+  const opt = (v, label, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(label)}</option>`;
+  const [n, cards] = mResults(ten);
+  return head + `<section class="tile filters">
+      <label class="fld q">بحث<input type="search" data-mf="q" value="${esc(mf.q)}" placeholder="مثال: إطلالة بحر، مسبح، قرب المدارس"></label>
+      <label class="fld">المنطقة<select data-mf="area">${opt('', 'كل المناطق', mf.area)}${AREAS.map((a) => opt(a, a, mf.area)).join('')}</select></label>
+      <label class="fld">النوع<select data-mf="type">${opt('', 'كل الأنواع', mf.type)}${LTYPES.map((a) => opt(a, a, mf.type)).join('')}</select></label>
+      <label class="fld">غرف النوم<select data-mf="beds">${opt('', 'أي عدد', mf.beds)}${[1, 2, 3, 4].map((a) => opt(a, a + ' أو أكثر', mf.beds)).join('')}</select></label>
+      <label class="fld">أقصى إيجار (ر.ع.)<input type="number" min="0" step="10" inputmode="numeric" data-mf="max" value="${esc(mf.max)}" placeholder="بلا حد"></label>
+      <label class="fld">الأثاث<select data-mf="furn">${opt('', 'الكل', mf.furn)}${opt('yes', 'مفروشة', mf.furn)}${opt('no', 'غير مفروشة', mf.furn)}</select></label>
+      <label class="fld">الترتيب<select data-mf="sort">${opt('new', 'الأحدث', mf.sort)}${opt('cheap', 'الأقل سعرًا', mf.sort)}${opt('dear', 'الأعلى سعرًا', mf.sort)}${opt('big', 'الأكبر مساحة', mf.sort)}</select></label>
+    </section>
+    <div class="mcount mut" id="mcount"><span class="num">${n}</span> إعلان</div>
+    <div class="lgrid" id="mres">${cards}</div>`;
+}
+function myListings() {
+  const mine = mkt.listings.filter((l) => l.mine).sort((a, b) => (a.status === 'rented') - (b.status === 'rented'));
+  if (!mine.length) return `<section class="tile empty">لم تنشر أي إعلان بعد. اضغط «أضف إعلان»، أو افتح وحدة شاغرة من صفحة المباني واختر «انشر في السوق».</section>`;
+  return `<div class="mylist">${mine.map((l) => {
+    const [cls, txt] = LSTATUS[l.status];
+    const inq = l.inquiries.slice().reverse();
+    return `<section class="tile"><div class="mine"><img src="${esc(imgsOf(l)[0] || '')}" alt=""><div class="grow">
+      <div class="tools" style="margin:0"><b style="font-size:17px">${esc(l.title)}</b><span class="pill ${cls}">${txt}</span></div>
+      <span class="mut" style="font-size:13px">${esc(l.area)} · ${esc(l.type)} · <span class="num">${fmt(l.rent)}</span> ر.ع. / شهر${l.unitId && unitOf(l.unitId) ? ' · ' + esc(place(l.unitId)) : ''}</span>
+      <span style="font-size:13px;font-weight:600"><span class="num">${l.views}</span> مشاهدة · <span class="num">${l.inquiries.length}</span> طلب معاينة · نُشر ${esc(l.date)}</span>
+      <div class="bars" style="margin-top:6px"><button class="btn small" data-mk-open="${l.id}">عرض</button><button class="btn soft small" data-mk-edit="${l.id}">تعديل</button><button class="btn soft small" data-mk-toggle="${l.id}">${l.status === 'active' ? 'إيقاف مؤقت' : 'إعادة النشر'}</button><button class="btn danger small" data-mk-del="${l.id}">حذف</button></div>
+      ${inq.length ? `<div class="inqs"><span class="mut" style="font-size:12px;font-weight:600">طلبات المعاينة</span>${inq.map((x) => `<div class="inq ${x.seen ? '' : 'new'}"><b>${esc(x.name)}${x.seen ? '' : ' <span class="pill new">جديد</span>'}</b><span>${esc(x.msg)}</span><span class="mut">${esc(x.when)} · ${esc(x.date)}${x.phone ? ` · <span class="num" dir="ltr">${esc(x.phone)}</span>` : ''}</span>${x.phone && waLink(x.phone) ? `<a class="btn small" style="align-self:flex-start;text-decoration:none;margin-top:4px" href="${waLink(x.phone)}" target="_blank" rel="noopener">رد عبر واتساب</a>` : ''}</div>`).join('')}</div>` : ''}
+    </div></div></section>`;
+  }).join('')}</div>`;
+}
+function openListing(id) {
+  const l = lOf(id); if (!l) return;
+  const ten = document.body.classList.contains('tenant');
+  const own = l.mine && !ten;
+  if (!own) { l.views++; } else l.inquiries.forEach((x) => { x.seen = true; });
+  persistM();
+  sheetSave = null; openUnitId = null;
+  const imgs = imgsOf(l);
+  const info = (k, v) => `<div class="kv"><span class="mut">${k}</span><b>${v}</b></div>`;
+  const fav = mkt.saved.includes(l.id);
+  const wa = !own && l.phone && waLink(l.phone);
+  const acts = own
+    ? `<button class="btn" data-mk-edit="${l.id}">تعديل الإعلان</button><button class="btn soft" data-mk-toggle="${l.id}">${l.status === 'active' ? 'إيقاف مؤقت' : 'إعادة النشر'}</button><button class="btn danger" data-mk-del="${l.id}">حذف</button>`
+    : `<button class="btn" data-mk-ask="${l.id}">اطلب معاينة</button>${wa ? `<a class="btn soft" style="text-decoration:none" href="${wa}" target="_blank" rel="noopener">واتساب المعلن</a>` : ''}<button class="btn soft" data-mk-fav="${l.id}">${fav ? 'محفوظ ✓' : 'حفظ'}</button>`;
+  $('#sheet').innerHTML = `<div class="panel pop" role="dialog" aria-modal="true" aria-label="${esc(l.title)}">
+    <div class="gal">${imgs.map((s, i) => `<img src="${esc(s)}" alt="صورة ${i + 1} من ${imgs.length}">`).join('')}</div>
+    ${imgs.length > 1 ? `<span class="mut galhint">${imgs.length} صور · اسحب لرؤية المزيد</span>` : ''}
+    <div class="tools" style="margin:0;align-items:flex-start"><div><span class="mut" style="font-size:13px">${esc(l.area)} · ${esc(l.type)}</span><h2 style="font-size:21px;line-height:1.6">${esc(l.title)}</h2></div><span class="lpr"><span class="num">${fmt(l.rent)}</span> <small class="mut" style="font-size:13px">ر.ع. / شهر</small></span></div>
+    <div class="kvs">${l.type === 'محل' || l.type === 'مكتب' ? '' : info('غرف النوم', Number(l.beds) ? `<span class="num">${l.beds}</span>` : 'استوديو')}${info('الحمّامات', `<span class="num">${l.baths}</span>`)}${info('المساحة', l.size ? `<span class="num">${l.size}</span> م²` : '—')}${info('الأثاث', l.furnished === 'yes' ? 'مفروشة' : 'غير مفروشة')}</div>
+    ${l.desc ? `<p style="margin:0;white-space:pre-line">${esc(l.desc)}</p>` : ''}
+    ${(l.feats || []).length ? `<div class="feats">${l.feats.map((f) => `<span class="chip">${esc(f)}</span>`).join('')}</div>` : ''}
+    <span class="mut" style="font-size:12px">المعلن: ${esc(l.owner)} · نُشر ${esc(l.date)} · <span class="num">${l.views}</span> مشاهدة</span>
+    <div class="bars">${acts}<button class="btn soft" data-close>إغلاق</button></div></div>`;
+  $('#sheet').hidden = false;
+}
+function askViewing(id) {
+  const l = lOf(id); if (!l) return;
+  const t = document.body.classList.contains('tenant') ? me() : null;
+  sheetSave = (v) => {
+    l.inquiries.push({ id: uid('q'), name: v.name.trim(), phone: v.phone.trim(), msg: v.msg.trim() || 'أرغب في معاينة الوحدة.', when: v.when, date: today(), seen: false });
+    persistM(); toast('تم إرسال طلبك إلى ' + l.owner);
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>طلب معاينة</h2><span class="mut" style="font-size:13px">${esc(l.title)} · ${esc(l.area)}</span>
+    <label for="f-name">اسمك<input id="f-name" name="name" required value="${esc(t ? t.name : '')}"></label>
+    <label for="f-phone">رقم الهاتف أو واتساب<input id="f-phone" name="phone" type="tel" required placeholder="+968" value="${esc(t ? t.phone : '')}"></label>
+    <label for="f-when">الوقت المناسب للمعاينة<select id="f-when" name="when">${['صباحًا', 'مساءً', 'عطلة نهاية الأسبوع', 'أي وقت'].map((x) => `<option>${x}</option>`).join('')}</select></label>
+    <label for="f-msg">رسالة<textarea id="f-msg" name="msg">مرحبًا، هل الوحدة ما زالت متاحة؟ أرغب في معاينتها.</textarea></label>
+    <div class="acts"><button class="btn" type="submit">إرسال الطلب</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function listingForm(id, unitId) {
+  const l = id ? lOf(id) : null;
+  const u = !l && unitId ? unitOf(unitId) : null;
+  const b = u && bOf(u.buildingId);
+  const kindMap = { 'شقة': 'شقة', 'فيلا': 'فيلا', 'لوفت': 'لوفت', 'محل': 'محل', 'مكتب': 'مكتب' };
+  const d = l || { title: u ? `${u.label} في ${b.name}` : '', type: (b && kindMap[b.kind]) || 'شقة', area: (b && AREAS.includes(b.area) && b.area) || 'الخوير', rent: u ? u.rent : '', beds: 2, baths: 2, size: '', furnished: 'no', feats: [], desc: '', phone: '', unitId: unitId || '' };
+  openUnitId = null;
+  const sel = (name, items, cur) => `<select id="f-${name}" name="${name}">${items.map(([v, t]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  sheetSave = async (v) => {
+    const files = v.$all('photos').filter((f) => f && f.size).slice(0, 5);
+    const photos = [];
+    for (const f of files) { const p = await readImage(f, 800, 0.62); if (p) photos.push(p); }
+    const k = Math.floor(Math.random() * PAL.length);
+    const data = { title: v.title.trim(), type: v.type, area: v.area, rent: Number(v.rent), beds: Number(v.beds), baths: Number(v.baths), size: Number(v.size) || 0, furnished: v.furnished, feats: v.$all('feats'), desc: v.desc.trim(), phone: v.phone.trim() };
+    if (l) {
+      Object.assign(l, data);
+      if (photos.length) l.photos = photos; else if (!l.photos.length) l.art = artFor(l.type, l.art?.[0]?.[1] ?? k);
+      toast('تم حفظ الإعلان');
+    } else {
+      mkt.listings.unshift(Object.assign({ id: uid('l'), status: 'active', mine: true, owner: 'سالم العبري', inquiries: [], views: 0, date: today(), ts: Date.now(), unitId: v.unitId || '', photos, art: artFor(data.type, k) }, data));
+      mf.tab = 'mine';
+      toast(photos.length ? 'تم نشر إعلانك مع ' + photos.length + ' صور' : 'تم نشر إعلانك');
+    }
+    if (!persistM()) { if (l) l.photos = []; else mkt.listings[0].photos = []; persistM(); toast('مساحة المتصفح ممتلئة، نُشر الإعلان بدون الصور.'); }
+    if (location.hash !== '#market') location.hash = '#market';
+  };
+  $('#sheet').innerHTML = `<form class="panel pop" id="sheetForm"><h2>${l ? 'تعديل الإعلان' : 'إعلان جديد'}</h2>
+    ${u ? `<span class="mut" style="font-size:13px">من وحدتك الشاغرة: ${esc(place(u.id))}</span><input type="hidden" name="unitId" value="${esc(u.id)}">` : ''}
+    <label class="drop" for="f-photos"><span class="ph" aria-hidden="true">${LI(I_CAM)}</span><span id="photosTxt">${l && l.photos.length ? 'اختر صورًا جديدة لاستبدال الحالية' : 'أضف حتى 5 صور للوحدة'}</span><input id="f-photos" name="photos" type="file" accept="image/*" multiple></label>
+    <label for="f-title">عنوان الإعلان<input id="f-title" name="title" required value="${esc(d.title)}" placeholder="مثال: شقة غرفتين قرب البحر"></label>
+    <div class="row2"><label for="f-type">النوع${sel('type', LTYPES.map((x) => [x, x]), d.type)}</label><label for="f-area">المنطقة${sel('area', AREAS.map((x) => [x, x]), d.area)}</label></div>
+    <div class="row3"><label for="f-rent">الإيجار الشهري (ر.ع.)<input id="f-rent" name="rent" type="number" min="1" required value="${esc(d.rent)}"></label><label for="f-size">المساحة (م²)<input id="f-size" name="size" type="number" min="0" value="${esc(d.size || '')}"></label><label for="f-furnished">الأثاث${sel('furnished', [['no', 'غير مفروشة'], ['yes', 'مفروشة']], d.furnished)}</label></div>
+    <div class="row2"><label for="f-beds">غرف النوم${sel('beds', [[0, 'استوديو'], 1, 2, 3, 4, 5, 6].map((x) => (Array.isArray(x) ? x : [x, x])), d.beds)}</label><label for="f-baths">الحمّامات${sel('baths', [1, 2, 3, 4, 5, 6].map((x) => [x, x]), d.baths)}</label></div>
+    <fieldset class="prio"><legend>المميزات</legend><div class="checks">${FEATS.map((f) => `<label><input type="checkbox" name="feats" value="${esc(f)}" ${(d.feats || []).includes(f) ? 'checked' : ''}>${esc(f)}</label>`).join('')}</div></fieldset>
+    <label for="f-desc">الوصف<textarea id="f-desc" name="desc" placeholder="الطابق، القرب من الخدمات، مدة العقد، ما يشمله الإيجار…">${esc(d.desc)}</textarea></label>
+    <label for="f-phone">رقم واتساب للتواصل (اختياري)<input id="f-phone" name="phone" type="tel" placeholder="+968" value="${esc(d.phone || '')}"></label>
+    <div class="acts"><button class="btn" type="submit">${l ? 'حفظ' : 'نشر الإعلان'}</button><button class="btn soft" type="button" data-close>إلغاء</button></div></form>`;
+  $('#sheet').hidden = false;
+}
+function refreshResults() {
+  const box = $('#mres'); if (!box) return;
+  const [n, cards] = mResults(document.body.classList.contains('tenant'));
+  box.innerHTML = cards; $('#mcount').innerHTML = `<span class="num">${n}</span> إعلان`;
+}
+document.addEventListener('input', (e) => { const k = e.target.dataset && e.target.dataset.mf; if (!k) return; mf[k] = e.target.value; refreshResults(); });
+document.addEventListener('change', (e) => {
+  if (e.target.id !== 'f-photos') return;
+  const fs = [...(e.target.files || [])].slice(0, 5), box = e.target.closest('.drop'); if (!box) return;
+  const ph = box.querySelector('.ph, .many'); const wrap = document.createElement('span'); wrap.className = 'many';
+  fs.forEach((f) => { const i = document.createElement('img'); i.alt = ''; i.src = URL.createObjectURL(f); wrap.appendChild(i); });
+  if (ph && fs.length) ph.replaceWith(wrap);
+  const tx = $('#photosTxt'); if (tx) tx.textContent = fs.length ? `${fs.length} صور مختارة` : 'أضف حتى 5 صور للوحدة';
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.mkTab) { mf.tab = d.mkTab; render(); }
+  else if (d.mkOpen) openListing(d.mkOpen);
+  else if ('mkNew' in d) listingForm();
+  else if (d.mkUnit) { closeSheet(); listingForm(null, d.mkUnit); }
+  else if (d.mkEdit) { closeSheet(); listingForm(d.mkEdit); }
+  else if (d.mkAsk) { closeSheet(); askViewing(d.mkAsk); }
+  else if (d.mkFav) {
+    const i = mkt.saved.indexOf(d.mkFav); if (i >= 0) mkt.saved.splice(i, 1); else mkt.saved.push(d.mkFav);
+    persistM(); toast(i >= 0 ? 'أُزيل من المحفوظة' : 'تم الحفظ في «المحفوظة»');
+    const inSheet = b.closest('#sheet'); render(); if (inSheet) openListing(d.mkFav);
+  }
+  else if (d.mkToggle) { const l = lOf(d.mkToggle); l.status = l.status === 'active' ? 'paused' : 'active'; persistM(); closeSheet(); toast(l.status === 'active' ? 'الإعلان منشور' : 'تم إيقاف الإعلان مؤقتًا'); render(); }
+  else if (d.mkDel) { const l = lOf(d.mkDel); confirmBox(`حذف إعلان «${l.title}»؟`, () => { mkt.listings = mkt.listings.filter((x) => x.id !== l.id); mkt.saved = mkt.saved.filter((x) => x !== l.id); persistM(); toast('تم حذف الإعلان'); }); }
+});
+
 /* ---------- Router ---------- */
 function route() {
   const h = location.hash.slice(1);
   if (h.startsWith('building-')) return ['buildings', building(h.slice(9))];
-  const pages = { overview, rent, buildings, maintenance, prefs, 't-home': tHome, 't-pay': tPay, 't-requests': tRequests, 't-receipts': tReceipts };
+  const pages = { overview, rent, buildings, maintenance, prefs, 't-home': tHome, 't-pay': tPay, 't-requests': tRequests, 't-receipts': tReceipts, market: () => market(false), 't-market': () => market(true) };
   const p = pages[h] ? h : 'overview';
   return [p, pages[p]()];
 }
@@ -526,6 +785,7 @@ document.addEventListener('click', (e) => {
   if (d.setTheme) { document.documentElement.dataset.mode = d.setTheme; save('sakan-theme', d.setTheme); }
   else if (d.setStyle) { document.documentElement.dataset.style = d.setStyle; save('sakan-style', d.setStyle); }
   else if (d.filter) { rentFilter = d.filter; }
+  else if (d.setAlert) { alertAt = Number(d.setAlert); save('sakan-alert', d.setAlert); toast('سيظهر التنبيه تحت ' + alertAt + '%'); }
   else if (d.pay) { const inSheet = b.closest('#sheet') && !openUnitId; markPaid(d.pay); persist(); if (inSheet) closeSheet(); render(); if (openUnitId) openUnit(openUnitId); return; }
   else if ('newReq' in d) { newRequest(); return; }
   else if ('transfer' in d) { uploadTransfer(); return; }
@@ -600,7 +860,7 @@ document.addEventListener('click', (e) => {
     });
     return;
   }
-  else if ('reset' in d) { confirmBox('إعادة كل البيانات التجريبية؟', () => { db = seed(); toast('تمت إعادة البيانات'); }, 'إعادة'); return; }
+  else if ('reset' in d) { confirmBox('إعادة كل البيانات التجريبية؟', () => { db = seed(); mkt = seedMarket(); persistM(); toast('تمت إعادة البيانات'); }, 'إعادة'); return; }
   else return;
   render();
 });
@@ -608,7 +868,8 @@ document.addEventListener('click', (e) => {
 document.addEventListener('submit', (e) => {
   if (e.target.id !== 'sheetForm') return;
   e.preventDefault();
-  const v = Object.fromEntries(new FormData(e.target).entries());
+  const fd = new FormData(e.target);
+  const v = Object.fromEntries(fd.entries()); v.$all = (k) => fd.getAll(k);
   const fn = sheetSave; closeSheet();
   if (fn) {
     const r = fn(v);
