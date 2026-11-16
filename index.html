@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="سكن">
-<link rel="stylesheet" href="styles.css?v=16">
+<link rel="stylesheet" href="styles.css?v=20">
 <script>
   try {
     var s = localStorage.getItem('sakan-style'), t = localStorage.getItem('sakan-theme');
@@ -27,7 +27,7 @@
 <body>
 <header class="mhead">
   <div class="mbrand"><span class="logo"><svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26"/><path class="cup" d="M28 51a22 22 0 0 0 44 0"/><path class="dot" d="M50 25l8 8-8 8-8-8z"/></svg><span class="brand">سكن</span></span><span class="tagline" id="mtag">كل عقاراتك في مكان واحد</span></div>
-  <div class="mtools"><button type="button" class="bellbtn" data-bell aria-label="الإشعارات"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="bdot" hidden></span></button><div class="seg" role="group" aria-label="المظهر">
+  <div class="mtools"><button type="button" class="langbtn" data-lang lang="en">English</button><button type="button" class="bellbtn" data-bell aria-label="الإشعارات"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="bdot" hidden></span></button><div class="seg" role="group" aria-label="المظهر">
     <button type="button" data-set-theme="light">فاتح</button>
     <button type="button" data-set-theme="dark">داكن</button>
   </div></div>
@@ -46,6 +46,7 @@
       <a href="#prefs" data-page="prefs"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>الإعدادات</span></a>
     </div>
     <div class="spacer"></div>
+    <button type="button" class="langbtn" data-lang lang="en">English</button>
     <div class="seg dseg" role="group" aria-label="المظهر">
       <button type="button" data-set-theme="light">فاتح</button>
       <button type="button" data-set-theme="dark">داكن</button>
@@ -64,6 +65,7 @@
       <a href="#t-receipts" data-page="t-receipts"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>الإيصالات</span></a>
     </div>
     <div class="spacer"></div>
+    <button type="button" class="langbtn" data-lang lang="en">English</button>
     <a class="switch" href="#overview">العودة لحساب المالك</a>
     <span class="byline">من تطوير CUE</span>
   </nav>
@@ -71,7 +73,8 @@
 </div>
 <div id="sheet" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
-<script src="app.js?v=16"></script>
-<script src="features.js?v=16"></script>
+<script src="app.js?v=20"></script>
+<script src="features.js?v=20"></script>
+<script src="i18n.js?v=20"></script>
 </body>
 </html>

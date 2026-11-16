@@ -296,8 +296,9 @@ function trendChart() {
   const rows = [...db.history.slice(-11), { m: CUR, short: MONTHS[new Date().getMonth()], exp: t.expected, pct: t.pct, live: true }];
   const W = 760, H = 250, P = { l: 8, r: 42, t: 30, b: 30 }, bw = (W - P.l - P.r) / rows.length;
   const y = (p) => P.t + (H - P.t - P.b) * (1 - p / 100);
+  const ltr = document.documentElement.dir === 'ltr';
   const bars = rows.map((r, i) => {
-    const low = r.pct < alertAt, x = W - P.r - (i + 1) * bw + 5, w = bw - 10, top = y(r.pct);
+    const low = r.pct < alertAt, x = (document.documentElement.dir === 'ltr' ? P.r + i * bw : W - P.r - (i + 1) * bw) + 5, w = bw - 10, top = y(r.pct);
     const col = Math.round(r.exp * r.pct / 100);
     return `<g class="bar ${low ? 'low' : ''}${r.live ? ' live' : ''}" tabindex="0" role="img" aria-label="${r.m}: ${r.pct}% · ${fmt(col)} من ${fmt(r.exp)} ر.ع.">
       <rect class="hit" x="${x - 4}" y="${P.t}" width="${w + 8}" height="${H - P.t - P.b}"/>
@@ -307,8 +308,8 @@ function trendChart() {
       <foreignObject x="${Math.min(Math.max(x + w / 2 - 95, 0), W - 190)}" y="${Math.max(top - 62, 0)}" width="190" height="58"><div class="tip" xmlns="http://www.w3.org/1999/xhtml"><b>${r.m}</b><span><span class="num">${r.pct}%</span> · <span class="num">${fmt(col)}</span> ر.ع.</span></div></foreignObject>
     </g>`;
   }).join('');
-  const grid = [0, 50, 100].map((p) => `<line class="gl" x1="${P.l}" x2="${W - P.r}" y1="${y(p)}" y2="${y(p)}"/><text class="yl" x="${W - P.r + 6}" y="${y(p) + 4}" text-anchor="start">${p}%</text>`).join('');
-  return `<figure class="trend"><div class="svgwrap"><svg viewBox="0 0 ${W} ${H}" role="group" aria-label="نسبة التحصيل الشهرية لآخر 12 شهرًا">${grid}<line class="thr" x1="${P.l}" x2="${W - P.r}" y1="${y(alertAt)}" y2="${y(alertAt)}"/>${bars}</svg></div>
+  const grid = [0, 50, 100].map((p) => `<line class="gl" x1="${ltr ? P.r : P.l}" x2="${ltr ? W - P.l : W - P.r}" y1="${y(p)}" y2="${y(p)}"/><text class="yl" x="${document.documentElement.dir === 'ltr' ? P.r - 6 : W - P.r + 6}" y="${y(p) + 4}" text-anchor="${document.documentElement.dir === 'ltr' ? 'end' : 'start'}">${p}%</text>`).join('');
+  return `<figure class="trend"><div class="svgwrap"><svg viewBox="0 0 ${W} ${H}" role="group" aria-label="نسبة التحصيل الشهرية لآخر 12 شهرًا">${grid}<line class="thr" x1="${ltr ? P.r : P.l}" x2="${ltr ? W - P.l : W - P.r}" y1="${y(alertAt)}" y2="${y(alertAt)}"/>${bars}</svg></div>
     <figcaption><span class="lg"><i class="ok"></i>فوق حد التنبيه</span><span class="lg"><i class="low"></i>تحت حد التنبيه (!)</span><span class="lg"><i class="thr"></i>حد التنبيه <span class="num">${alertAt}%</span></span></figcaption>
     <details><summary>عرض كجدول</summary><table class="mini"><thead><tr><th>الشهر</th><th>النسبة</th><th>المحصّل</th><th>المتوقع</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.m}</td><td class="num">${r.pct}%</td><td class="num">${fmt(Math.round(r.exp * r.pct / 100))}</td><td class="num">${fmt(r.exp)}</td></tr>`).join('')}</tbody></table></details></figure>`;
 }
@@ -599,7 +600,7 @@ window.EXTRA_PAGES['t-home'] = () => {
   const t = me(); let html = tHome(); if (!t) return html;
   const u = unitOf(t.unitId); const anns = (db.anns || []).filter((a) => u && a.bid === u.buildingId).slice(0, 2);
   const c = contractOf(t.id);
-  const extra = (c && c.status === 'sent' ? `<section class="tile s2 c t3"><span class="lbl">عقدك بانتظار توقيعك</span><span style="font-weight:600">من ${arDate(c.start)} إلى ${arDate(c.end)} · <span class="num">${fmt(c.rent)}</span> ر.ع. شهريًا</span><a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-contract">مراجعة وتوقيع</a></section>` : '')
+  const extra = (c && c.status === 'sent' ? `<section class="tile s2 c t3"><span class="lbl">عقدك بانتظار توقيعك</span><span style="font-weight:600">${arDate(c.start)} ← ${arDate(c.end)} · <span class="num">${fmt(c.rent)}</span> ر.ع. شهريًا</span><a class="btn" style="align-self:flex-start;text-decoration:none" href="#t-contract">مراجعة وتوقيع</a></section>` : '')
     + (anns.length ? `<section class="tile ${c && c.status === 'sent' ? 's2' : 's4'} ann"><div class="head" style="margin:0"><h2>إعلانات المبنى</h2></div>${anns.map((a) => `<div class="annrow"><span class="pill ${/انقطاع/.test(a.kind) ? 'late' : 'new'}">${esc(a.kind)}</span><span class="grow"><b>${esc(a.title)}</b><span style="font-size:13px">${esc(a.text)}</span><small class="mut">${esc(a.date)}</small></span></div>`).join('')}</section>` : '');
   if (t.paidUntil) html = html.replace('تم الدفع. شكرًا لك.', `تم الدفع. مدفوع مقدمًا حتى ${esc(t.paidUntil)}.`);
   return html.replace('<section class="tile s4">', extra + '<section class="tile s4">');
@@ -627,4 +628,4 @@ document.addEventListener('click', (e) => {
   else if (d.rate) { const [jid, n] = d.rate.split('|'); const j = db.jobs.find((x) => x.id === jid); if (j) { j.rating = Number(n); persist(); toast('شكرًا لتقييمك'); render(); } }
 });
 
-render();
+

@@ -18,3 +18,4 @@ All names and amounts are sample data. Changes are saved only in the viewer's br
 - **Owner:** e-sign contracts with renewals and 60-day expiry alerts, finance page (expenses, profit per building, 12-month collection trend), printable monthly report, technician assignment with WhatsApp message, building announcements, payment reminders with auto-reminder schedule, notifications.
 - **Tenant:** pay several months ahead, rental record certificate, contract signing on the phone, building announcements, rate finished repairs, notifications.
 - Map library: Leaflet 1.9.4 (BSD-2, in `vendor/leaflet`), tiles from CARTO / OpenStreetMap.
+- **English:** the English / عربي button switches the whole app, including sample data, to English with a left-to-right layout (`i18n.js`). The choice is remembered in the browser.

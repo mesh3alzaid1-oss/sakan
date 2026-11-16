@@ -593,7 +593,8 @@ table.mini th,table.mini td{padding:6px 8px;border-bottom:1px solid var(--line);
 .wa .mut{color:#8696A0}
 .bubble{align-self:flex-start;max-width:90%;background:#005C4B;color:#E9EDEF;padding:8px 12px;border-radius:12px 12px 12px 4px;font-size:14px;line-height:1.7}
 .techline{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--link)}
-.todos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.todos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.todo{min-width:0}
 .todo{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:16px;background:var(--row);text-decoration:none;color:inherit}
 .todo > b{min-width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--input);font-size:18px}
 .todo.hot > b{background:#E5484D;color:#fff}
@@ -651,3 +652,23 @@ table.mini th,table.mini td{padding:6px 8px;border-bottom:1px solid var(--line);
 .arealbl span{display:inline-block;transform:translate(-50%,10px);white-space:nowrap;font:600 12px/1 var(--font);color:var(--mut);text-shadow:0 0 3px var(--sheet),0 0 3px var(--sheet)}
 .arealbl.sea span{font-size:14px;letter-spacing:1px;color:#5E9BAA;text-shadow:none;opacity:.8}
 .mmap.osmdark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9)}
+
+/* ---------- English (left to right) ---------- */
+.langbtn{border:0;border-radius:14px;padding:9px 14px;background:var(--row);color:var(--fg);font:600 14px/1 system-ui,-apple-system,'Segoe UI',sans-serif;cursor:pointer}
+.langbtn[lang="ar"]{font-family:'Noto Kufi Arabic',sans-serif}
+.side .langbtn{margin:0 4px 8px}
+.mtools .langbtn{padding:8px 12px}
+.langbtn:focus-visible{outline:2px solid var(--active);outline-offset:2px}
+:root[lang="en"]{--font:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;--display:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;--num:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+:root[dir="ltr"] th,:root[dir="ltr"] .opt,:root[dir="ltr"] .unit,:root[dir="ltr"] .act,:root[dir="ltr"] .method,:root[dir="ltr"] .rc,:root[dir="ltr"] .lopen,:root[dir="ltr"] .pickbtn,:root[dir="ltr"] .picklist [data-pv],:root[dir="ltr"] .sugg button,:root[dir="ltr"] .note,:root[dir="ltr"] table.mini th,:root[dir="ltr"] table.mini td{text-align:left}
+:root[dir="ltr"] .act{padding:8px 8px 8px 16px}
+:root[dir="ltr"] .lprice{right:auto;left:10px}
+:root[dir="ltr"] .ltags{right:auto;left:10px}
+:root[dir="ltr"] .lfav{left:auto;right:10px}
+:root[dir="ltr"] .dbrand .bellbtn{left:auto;right:0}
+:root[dir="ltr"] .back .ico svg{transform:scaleX(-1)}
+@media (hover:hover){:root[dir="ltr"] .back:hover{transform:translateX(-3px)}}
+:root[dir="ltr"] .inq.new{box-shadow:inset 3px 0 0 var(--active)}
+:root[dir="ltr"] img.sig{object-position:left}
+:root[dir="ltr"] .tip{direction:ltr}
+:root[dir="ltr"] .bubble{border-radius:12px 12px 4px 12px}
